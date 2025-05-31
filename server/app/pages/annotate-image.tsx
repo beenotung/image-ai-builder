@@ -62,7 +62,13 @@ function Main(attrs: {}, context: Context) {
   return (
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
-        <div style="font-size: 2rem">🦞?</div>
+        <ion-item>
+          <ion-select value="1">
+            <ion-select-option value="1">🦞?</ion-select-option>
+            <ion-select-option value="2">💩?</ion-select-option>
+            <ion-select-option value="3">💊?</ion-select-option>
+          </ion-select>
+        </ion-item>
         <div style="flex-grow: 1; overflow: hidden">
           <img
             src="https://picsum.photos/seed/1/3000/4000"
