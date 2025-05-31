@@ -16,14 +16,22 @@ import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
 
-let pageTitle = <Locale en="Annotate Image" zh_hk="Annotate Image" zh_cn="Annotate Image" />
+let pageTitle = (
+  <Locale en="Annotate Image" zh_hk="Annotate Image" zh_cn="Annotate Image" />
+)
 let addPageTitle = (
-  <Locale en="Add Annotate Image" zh_hk="添加Annotate Image" zh_cn="添加Annotate Image" />
+  <Locale
+    en="Add Annotate Image"
+    zh_hk="添加Annotate Image"
+    zh_cn="添加Annotate Image"
+  />
 )
 
 let style = Style(/* css */ `
-#AnnotateImage {
-
+#AnnotateImage .control-buttons ion-button {
+  flex-grow: 1;
+  margin: 0;
+  height: 4rem;
 }
 `)
 
@@ -38,8 +46,7 @@ let page = (
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="AnnotateImage" class="ion-padding">
-      Items
+    <ion-content id="AnnotateImage" class="ion-no-padding">
       <Main />
     </ion-content>
   </>
@@ -54,22 +61,23 @@ function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
   return (
     <>
-      <ion-list>
-        {mapArray(items, item => (
-          <ion-item>
-            {item.title} ({item.slug})
-          </ion-item>
-        ))}
-      </ion-list>
-      {user ? (
-        <Link href="/annotate-image/add" tagName="ion-button">
-          {addPageTitle}
-        </Link>
-      ) : (
-        <p>
-          You can add annotate image after <Link href="/register">register</Link>.
-        </p>
-      )}
+      <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
+        <div style="font-size: 2rem">🦞?</div>
+        <div style="flex-grow: 1; overflow: hidden">
+          <img
+            src="https://picsum.photos/seed/1/3000/4000"
+            style="height: 100%"
+          />
+        </div>
+        <div style="display: flex;" class="control-buttons">
+          <ion-button size="large" color="danger">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+          <ion-button size="large" color="success">
+            <ion-icon name="checkmark" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
+      </div>
     </>
   )
 }
@@ -162,7 +170,8 @@ function Submit(attrs: {}, context: DynamicContext) {
     return (
       <Redirect
         href={
-          '/annotate-image/result?' + new URLSearchParams({ error: String(error) })
+          '/annotate-image/result?' +
+          new URLSearchParams({ error: String(error) })
         }
       />
     )
