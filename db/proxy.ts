@@ -108,6 +108,7 @@ export type ContentReport = {
 
 export type Image = {
   id?: null | number
+  original_filename: null | string
   filename: string
   user_id: number
   user?: User

@@ -1,10 +1,11 @@
 import { o } from '../jsx/jsx.js'
-import { Routes } from '../routes.js'
+import { ajaxRoute, Routes } from '../routes.js'
 import { apiEndpointTitle, title } from '../../config.js'
 import Style from '../components/style.js'
 import {
   Context,
   DynamicContext,
+  ExpressContext,
   getContextFormBody,
   throwIfInAPI,
 } from '../context.js'
@@ -13,18 +14,117 @@ import { IonBackButton } from '../components/ion-back-button.js'
 import { object, string } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
-import { getAuthUser } from '../auth/user.js'
+import { getAuthUser, getAuthUserId } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
+import { proxy } from '../../../db/proxy.js'
+import { loadClientPlugin } from '../../client-plugin.js'
+import { Script } from '../components/script.js'
+import { createUploadForm } from '../upload.js'
+import { del } from 'better-sqlite3-proxy'
+import { rm } from 'fs/promises'
+import { join } from 'path'
+import { env } from '../../env.js'
 
-let pageTitle = <Locale en="Upload Image" zh_hk="Upload Image" zh_cn="Upload Image" />
+let pageTitle = (
+  <Locale en="Upload Image" zh_hk="Upload Image" zh_cn="Upload Image" />
+)
 let addPageTitle = (
-  <Locale en="Add Upload Image" zh_hk="添加Upload Image" zh_cn="添加Upload Image" />
+  <Locale
+    en="Add Upload Image"
+    zh_hk="添加Upload Image"
+    zh_cn="添加Upload Image"
+  />
 )
 
 let style = Style(/* css */ `
-#UploadImage {
-
+#UploadImage #imageList {
+  display: flex;
+  flex-direction: column-reverse;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
+#UploadImage #imageList .image-item {
+  text-align: center;
+  position: relative;
+  background-color: white;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+}
+#UploadImage #imageList .image-item--buttons {
+  position: absolute;
+  top: 0;
+  right: 0
+}
+#UploadImage #imageList .image-item--filename {
+}
+`)
+
+let imagePlugin = loadClientPlugin({
+  entryFile: 'dist/client/image.js',
+})
+let sweetAlertPlugin = loadClientPlugin({
+  entryFile: 'dist/client/sweetalert.js',
+})
+
+let script = Script(/* js */ `
+var imageItemTemplate = document.querySelector('#imageList .image-item')
+imageItemTemplate.remove()
+
+async function pickImage() {
+  let files = await selectImage({
+    accept: '.jpg,.png,.webp,.heic,.gif',
+    multiple: true,
+  })
+  let formData = new FormData()
+  for (let _file of files) {
+    let { dataUrl, file } = await compressImageFile(_file)
+    let imageItem = imageItemTemplate.cloneNode(true)
+    let image = imageItem.querySelector('img')
+    image.src = dataUrl
+    image.file = file
+    imageItem.querySelector('.image-item--filename').textContent = file.name
+    imageList.appendChild(imageItem)
+    let uploadButton = imageItem.querySelector('.image-item--upload')
+  }
+  let buttons = imageList.querySelectorAll('.image-item--upload[color="primary"]')
+  for (let button of buttons) {
+    let imageItem = button.closest('.image-item')
+    let image = imageItem.querySelector('img')
+    let file = image.file
+    let formData = new FormData()
+    formData.append('image', file)
+    let res = await fetch('/upload-image/submit', {
+      method: 'POST',
+      body: formData,
+    })
+    let json = await res.json()
+    if (json.error) {
+      showError(json.error)
+      return
+    }
+    let url = json.url
+    image.src = url
+    button.setAttribute('color', 'success')
+    imageCount.textContent = json.count.toLocaleString()
+  }
+}
+
+async function removeImage(button) {
+  let imageItem = button.closest('.image-item')
+  let image = imageItem.querySelector('img')
+  let url = image.getAttribute('src')
+  if (url.startsWith('/uploads/')) {
+    let filename = url.slice('/uploads/'.length)
+    let params = new URLSearchParams({ filename })
+    let json = await fetch_json('/upload-image/remove?' + params)
+    if (json.error) {
+      return
+    }
+    imageCount.textContent = json.count.toLocaleString()
+  }
+  imageItem.remove()
+}
+
 `)
 
 let page = (
@@ -38,10 +138,12 @@ let page = (
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="UploadImage" class="ion-padding">
-      Items
+    <ion-content id="UploadImage" class="ion-padding" color="light">
       <Main />
     </ion-content>
+    {imagePlugin.node}
+    {sweetAlertPlugin.node}
+    {script}
   </>
 )
 
@@ -52,25 +154,49 @@ let items = [
 
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
+  let count = proxy.image.length.toLocaleString()
   return (
     <>
-      <ion-list>
-        {mapArray(items, item => (
-          <ion-item>
-            {item.title} ({item.slug})
-          </ion-item>
-        ))}
-      </ion-list>
-      {user ? (
-        <Link href="/upload-image/add" tagName="ion-button">
-          {addPageTitle}
-        </Link>
-      ) : (
-        <p>
-          You can add upload image after <Link href="/register">register</Link>.
-        </p>
-      )}
+      <div style="margin-bottom: 0.5rem; text-align: center">
+        Existing <span id="imageCount">{count}</span> images.
+      </div>
+      <form style="text-align: center">
+        <ion-button onclick="pickImage()">
+          <ion-icon name="cloud-upload" slot="start"></ion-icon> Upload Photos
+        </ion-button>
+        <div id="imageList">
+          <ImageItem
+            image_url="https://picsum.photos/seed/1/200/300"
+            filename="filename.jpg"
+          />
+          {mapArray(proxy.image, image => {
+            return (
+              <ImageItem
+                image_url={`/uploads/${image.filename}`}
+                filename={image.original_filename || image.filename}
+              />
+            )
+          })}
+        </div>
+      </form>
     </>
+  )
+}
+
+function ImageItem(attrs: { image_url: string; filename: string }) {
+  return (
+    <div class="image-item">
+      <div class="image-item--buttons">
+        <ion-button color="primary" disabled class="image-item--upload">
+          <ion-icon name="cloud-upload-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+        <ion-button color="danger" onclick="removeImage(this)">
+          <ion-icon name="trash" slot="icon-only"></ion-icon>
+        </ion-button>
+      </div>
+      <img src={attrs.image_url} />
+      <div class="image-item--filename">{attrs.filename}</div>
+    </div>
   )
 }
 
@@ -162,7 +288,8 @@ function Submit(attrs: {}, context: DynamicContext) {
     return (
       <Redirect
         href={
-          '/upload-image/result?' + new URLSearchParams({ error: String(error) })
+          '/upload-image/result?' +
+          new URLSearchParams({ error: String(error) })
         }
       />
     )
@@ -199,6 +326,43 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
   )
 }
 
+async function UploadImage(context: ExpressContext) {
+  let { req, res } = context
+  try {
+    let user_id = getAuthUserId(context)
+    if (!user_id) throw 'not login'
+    let form = createUploadForm()
+    let [fields, files] = await form.parse(req)
+    for (let file of files.image || []) {
+      proxy.image.push({
+        original_filename: file.originalFilename || null,
+        filename: file.newFilename,
+        user_id,
+      })
+      let url = '/uploads/' + file.newFilename
+      res.json({ url, count: proxy.image.length })
+      return
+    }
+    res.json({})
+  } catch (error) {
+    res.json({ error: String(error) })
+  }
+}
+
+async function RemoveImage(context: ExpressContext) {
+  let { req, res } = context
+  try {
+    let { filename } = req.query
+    if (typeof filename !== 'string') throw 'filename is required'
+    del(proxy.image, { filename })
+    let file = join(env.UPLOAD_DIR, filename)
+    await rm(file, { force: true })
+    res.json({ count: proxy.image.length })
+  } catch (error) {
+    res.json({ error: String(error) })
+  }
+}
+
 let routes = {
   '/upload-image': {
     resolve(context) {
@@ -210,24 +374,14 @@ let routes = {
       }
     },
   },
-  '/upload-image/add': {
-    title: title(addPageTitle),
-    description: 'TODO',
-    node: <AddPage />,
-    streaming: false,
-  },
-  '/upload-image/add/submit': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <Submit />,
-    streaming: false,
-  },
-  '/upload-image/result': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <SubmitResult />,
-    streaming: false,
-  },
+  '/upload-image/submit': ajaxRoute({
+    description: 'upload image',
+    api: UploadImage,
+  }),
+  '/upload-image/remove': ajaxRoute({
+    description: 'remove image',
+    api: RemoveImage,
+  }),
 } satisfies Routes
 
 export default { routes }
