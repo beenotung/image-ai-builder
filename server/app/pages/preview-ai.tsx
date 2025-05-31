@@ -15,6 +15,7 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
+import { proxy } from '../../../db/proxy.js'
 
 let pageTitle = <Locale en="Preview AI" zh_hk="Preview AI" zh_cn="Preview AI" />
 let addPageTitle = (
@@ -60,18 +61,12 @@ function Main(attrs: {}, context: Context) {
     <>
       <div style="position: relative;">
         <div style="position: absolute; right: 0; top: 0; display: flex; flex-direction: column; gap: 0.25rem;">
-          <div class="label-container">
-            <div class="class-label">🦞?</div>
-            <progress value="10" max="100"></progress>
-          </div>
-          <div class="label-container">
-            <div class="class-label">💩?</div>
-            <progress value="10" max="100"></progress>
-          </div>
-          <div class="label-container">
-            <div class="class-label">💊?</div>
-            <progress value="10" max="100"></progress>
-          </div>
+          {mapArray(proxy.label, label => (
+            <div class="label-container">
+              <div class="class-label">{label.title}</div>
+              <progress value="10" max="100"></progress>
+            </div>
+          ))}
         </div>
         <img
           src="https://picsum.photos/seed/2/3000/4000"

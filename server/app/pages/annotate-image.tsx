@@ -15,6 +15,7 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
+import { proxy } from '../../../db/proxy.js'
 
 let pageTitle = (
   <Locale en="Annotate Image" zh_hk="Annotate Image" zh_cn="Annotate Image" />
@@ -63,10 +64,12 @@ function Main(attrs: {}, context: Context) {
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
         <ion-item>
-          <ion-select value="1">
-            <ion-select-option value="1">🦞?</ion-select-option>
-            <ion-select-option value="2">💩?</ion-select-option>
-            <ion-select-option value="3">💊?</ion-select-option>
+          <ion-select value="1" label="Label">
+            {mapArray(proxy.label, label => (
+              <ion-select-option value={label.id}>
+                {label.title}
+              </ion-select-option>
+            ))}
           </ion-select>
         </ion-item>
         <div style="flex-grow: 1; overflow: hidden">

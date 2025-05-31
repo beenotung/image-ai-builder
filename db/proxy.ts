@@ -114,6 +114,13 @@ export type Image = {
   user?: User
 }
 
+export type Label = {
+  id?: null | number
+  title: string
+  dependency_id: null | number
+  dependency?: Label
+}
+
 export type DBProxy = {
   method: Method[]
   url: Url[]
@@ -128,6 +135,7 @@ export type DBProxy = {
   verification_code: VerificationCode[]
   content_report: ContentReport[]
   image: Image[]
+  label: Label[]
 }
 
 export let proxy = proxySchema<DBProxy>({
@@ -167,6 +175,10 @@ export let proxy = proxySchema<DBProxy>({
     image: [
       /* foreign references */
       ['user', { field: 'user_id', table: 'user' }],
+    ],
+    label: [
+      /* foreign references */
+      ['dependency', { field: 'dependency_id', table: 'label' }],
     ],
   },
 })

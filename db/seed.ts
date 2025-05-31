@@ -9,7 +9,23 @@ seedRow(proxy.method, { method: 'GET' })
 seedRow(proxy.method, { method: 'POST' })
 seedRow(proxy.method, { method: 'ws' })
 
-console.log(
-  'request methods:',
-  proxy.method.map(row => row.method),
-)
+proxy.label[1] = {
+  title: '🦞',
+  dependency_id: null,
+}
+proxy.label[2] = {
+  title: '🍜',
+  dependency_id: null,
+}
+proxy.label[3] = {
+  title: '💩',
+  dependency_id: null,
+}
+proxy.label[4] = {
+  title: '開尾',
+  dependency_id: 1,
+}
+proxy.label[5] = {
+  title: '舉鉗',
+  dependency_id: 1,
+}
