@@ -73,59 +73,23 @@ let homePage = (
         </ion-toolbar>
       </ion-header>
       <ion-content class="ion-padding">
-        <p>
-          You can get started by replacing the contents of this page in{' '}
-          <code class="inline-code">app-home.tsx</code>.
-        </p>
-        <p>
-          Hint: you can search a file by name in <b>vscode</b> by pressing{' '}
-          <code class="inline-code keyboard">Ctrl + P</code> or{' '}
-          <code class="inline-code keyboard">Cmd + P</code>.
-          <br />
-          <ion-note>(Cmd key looks like: ⌘)</ion-note>
-        </p>
-        <hr />
-        <div>
-          Fictional characters commonly used as placeholders in discussions
-          about cryptographic systems and protocols:
-        </div>
         <ion-list>
-          {mapArray(characters, character => (
-            <Link tagName="ion-item" href={'/app/characters/' + character.id}>
-              {character.name}
-            </Link>
-          ))}
+          <Link tagName="ion-item" href={'/app/characters/123'}>
+            1. Upload Image
+          </Link>
+          <Link tagName="ion-item" href={'/app/characters/123'}>
+            2. Annotate Image
+          </Link>
+          <Link tagName="ion-item" href={'/app/characters/123'}>
+            3. Train AI
+          </Link>
+          <Link tagName="ion-item" href={'/app/characters/123'}>
+            4. Preview AI
+          </Link>
+          <Link tagName="ion-item" href={'/app/characters/123'}>
+            5. Stats
+          </Link>
         </ion-list>
-        {sweetAlertPlugin.node}
-        <ion-button
-          fill="block"
-          color="primary"
-          class="ion-margin-top"
-          onclick="showToast('sample toast message','info')"
-        >
-          Show Toast
-        </ion-button>
-        <ion-button
-          fill="block"
-          color="primary"
-          onclick="showAlert('sample alert message','info')"
-        >
-          Show Alert
-        </ion-button>
-        <ion-menu-toggle>
-          <ion-button fill="block" color="primary">
-            Show Side Menu
-          </ion-button>
-        </ion-menu-toggle>
-        <Link
-          tagName="ion-button"
-          href="/login"
-          fill="block"
-          color="primary"
-          class="ion-margin-top"
-        >
-          Login
-        </Link>
         {wsStatus.safeArea}
       </ion-content>
     </div>
