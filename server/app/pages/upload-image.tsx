@@ -16,7 +16,7 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser, getAuthUserId } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
-import { proxy } from '../../../db/proxy.js'
+import { proxy, User } from '../../../db/proxy.js'
 import { loadClientPlugin } from '../../client-plugin.js'
 import { Script } from '../components/script.js'
 import { createUploadForm } from '../upload.js'
@@ -161,19 +161,21 @@ function Main(attrs: {}, context: Context) {
         Existing <span id="imageCount">{count}</span> images.
       </div>
       <form style="text-align: center">
-        <ion-button onclick="pickImage()">
+        <ion-button onclick={user ? 'pickImage()' : 'goto("/login")'}>
           <ion-icon name="cloud-upload" slot="start"></ion-icon> Upload Photos
         </ion-button>
         <div id="imageList">
           <ImageItem
             image_url="https://picsum.photos/seed/1/200/300"
             filename="filename.jpg"
+            user={user}
           />
           {mapArray(proxy.image, image => {
             return (
               <ImageItem
                 image_url={`/uploads/${image.filename}`}
                 filename={image.original_filename || image.filename}
+                user={user}
               />
             )
           })}
@@ -183,14 +185,21 @@ function Main(attrs: {}, context: Context) {
   )
 }
 
-function ImageItem(attrs: { image_url: string; filename: string }) {
+function ImageItem(attrs: {
+  image_url: string
+  filename: string
+  user: User | null
+}) {
   return (
     <div class="image-item">
       <div class="image-item--buttons">
         <ion-button color="primary" disabled class="image-item--upload">
           <ion-icon name="cloud-upload-outline" slot="icon-only"></ion-icon>
         </ion-button>
-        <ion-button color="danger" onclick="removeImage(this)">
+        <ion-button
+          color="danger"
+          onclick={attrs.user ? 'removeImage(this)' : 'goto("/login")'}
+        >
           <ion-icon name="trash" slot="icon-only"></ion-icon>
         </ion-button>
       </div>
