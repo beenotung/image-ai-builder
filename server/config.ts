@@ -30,7 +30,7 @@ export let config = {
   epoch,
   auto_open: !production && development && epoch === 1,
   client_target: 'es2020',
-  layout_type: LayoutType.navbar,
+  layout_type: LayoutType.ionic,
   use_social_login: true,
   enable_email: development || env.EMAIL_USER !== 'skip',
   enable_sms: development || env.SMS_API_KEY !== 'skip',
