@@ -74,19 +74,19 @@ let homePage = (
       </ion-header>
       <ion-content class="ion-padding">
         <ion-list>
-          <Link tagName="ion-item" href={'/app/characters/123'}>
+          <Link tagName="ion-item" href={'/upload-image'}>
             1. Upload Image
           </Link>
-          <Link tagName="ion-item" href={'/app/characters/123'}>
+          <Link tagName="ion-item" href={'/annotate-image'}>
             2. Annotate Image
           </Link>
-          <Link tagName="ion-item" href={'/app/characters/123'}>
+          <Link tagName="ion-item" href={'/train-ai'}>
             3. Train AI
           </Link>
-          <Link tagName="ion-item" href={'/app/characters/123'}>
+          <Link tagName="ion-item" href={'/preview-ai'}>
             4. Preview AI
           </Link>
-          <Link tagName="ion-item" href={'/app/characters/123'}>
+          <Link tagName="ion-item" href={'/stats'}>
             5. Stats
           </Link>
         </ion-list>
