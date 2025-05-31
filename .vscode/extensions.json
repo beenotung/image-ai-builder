@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "Gruntfuggly.todo-tree",
+    "PKief.material-icon-theme",
+    "Tobermory.es6-string-html",
+    "eamodio.gitlens",
+    "esbenp.prettier-vscode",
+    "formulahendry.auto-close-tag",
+    "formulahendry.auto-rename-tag",
+    "mhutchie.git-graph",
+    "streetsidesoftware.code-spell-checker",
+    "usernamehw.errorlens",
+    "wix.vscode-import-cost"
+  ]
+}
