@@ -16,13 +16,13 @@ import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
 
-let pageTitle = <Locale en="Preview Ai" zh_hk="Preview Ai" zh_cn="Preview Ai" />
+let pageTitle = <Locale en="Preview AI" zh_hk="Preview AI" zh_cn="Preview AI" />
 let addPageTitle = (
-  <Locale en="Add Preview Ai" zh_hk="添加Preview Ai" zh_cn="添加Preview Ai" />
+  <Locale en="Add Preview AI" zh_hk="添加Preview AI" zh_cn="添加Preview AI" />
 )
 
 let style = Style(/* css */ `
-#PreviewAi {
+#PreviewAI {
 
 }
 `)
@@ -38,7 +38,7 @@ let page = (
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="PreviewAi" class="ion-padding">
+    <ion-content id="PreviewAI" class="ion-padding">
       Items
       <Main />
     </ion-content>
@@ -77,7 +77,7 @@ function Main(attrs: {}, context: Context) {
 let addPage = (
   <>
     {Style(/* css */ `
-#AddPreviewAi .hint {
+#AddPreviewAI .hint {
   margin-inline-start: 1rem;
   margin-block: 0.25rem;
 }
@@ -90,7 +90,7 @@ let addPage = (
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="AddPreviewAi" class="ion-padding">
+    <ion-content id="AddPreviewAI" class="ion-padding">
       <form
         method="POST"
         action="/preview-ai/add/submit"
@@ -183,7 +183,7 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
           </ion-title>
         </ion-toolbar>
       </ion-header>
-      <ion-content id="AddPreviewAi" class="ion-padding">
+      <ion-content id="AddPreviewAI" class="ion-padding">
         {error ? (
           renderError(error, context)
         ) : (

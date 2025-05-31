@@ -23,7 +23,7 @@ export let config = {
   production,
   development,
   minify: production,
-  site_name: 'Image Ai Builder',
+  site_name: 'Image AI Builder',
   short_site_name: 'IAB',
   site_description: 'Demo website of ts-liveview',
   setup_robots_txt: false,

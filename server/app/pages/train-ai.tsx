@@ -16,13 +16,13 @@ import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
 
-let pageTitle = <Locale en="Train Ai" zh_hk="Train Ai" zh_cn="Train Ai" />
+let pageTitle = <Locale en="Train AI" zh_hk="Train AI" zh_cn="Train AI" />
 let addPageTitle = (
-  <Locale en="Add Train Ai" zh_hk="添加Train Ai" zh_cn="添加Train Ai" />
+  <Locale en="Add Train AI" zh_hk="添加Train AI" zh_cn="添加Train AI" />
 )
 
 let style = Style(/* css */ `
-#TrainAi {
+#TrainAI {
 
 }
 `)
@@ -38,7 +38,7 @@ let page = (
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="TrainAi" class="ion-padding">
+    <ion-content id="TrainAI" class="ion-padding">
       Items
       <Main />
     </ion-content>
@@ -77,7 +77,7 @@ function Main(attrs: {}, context: Context) {
 let addPage = (
   <>
     {Style(/* css */ `
-#AddTrainAi .hint {
+#AddTrainAI .hint {
   margin-inline-start: 1rem;
   margin-block: 0.25rem;
 }
@@ -90,7 +90,7 @@ let addPage = (
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="AddTrainAi" class="ion-padding">
+    <ion-content id="AddTrainAI" class="ion-padding">
       <form
         method="POST"
         action="/train-ai/add/submit"
@@ -183,7 +183,7 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
           </ion-title>
         </ion-toolbar>
       </ion-header>
-      <ion-content id="AddTrainAi" class="ion-padding">
+      <ion-content id="AddTrainAI" class="ion-padding">
         {error ? (
           renderError(error, context)
         ) : (

@@ -1,6 +1,6 @@
 import Stats from './pages/stats.js'
-import PreviewAi from './pages/preview-ai.js'
-import TrainAi from './pages/train-ai.js'
+import PreviewAI from './pages/preview-ai.js'
+import TrainAI from './pages/train-ai.js'
 import AnnotateImage from './pages/annotate-image.js'
 import UploadImage from './pages/upload-image.js'
 import ReportContent from './pages/report-content.js'
@@ -86,8 +86,8 @@ export type Routes = Record<string, PageRoute>
 // TODO direct support alternative urls instead of having to repeat the entry
 let routeDict = {
   ...Stats.routes,
-  ...PreviewAi.routes,
-  ...TrainAi.routes,
+  ...PreviewAI.routes,
+  ...TrainAI.routes,
   ...AnnotateImage.routes,
   ...UploadImage.routes,
   ...ReportContent.routes,
