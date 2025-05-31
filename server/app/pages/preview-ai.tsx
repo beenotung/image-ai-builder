@@ -22,8 +22,13 @@ let addPageTitle = (
 )
 
 let style = Style(/* css */ `
-#PreviewAI {
-
+#PreviewAI .label-container {
+  background-color: #fff9;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+}
+#PreviewAI .label-container progress {
+  width: 5rem;
 }
 `)
 
@@ -38,8 +43,7 @@ let page = (
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="PreviewAI" class="ion-padding">
-      Items
+    <ion-content id="PreviewAI" class="ion-no-padding">
       <Main />
     </ion-content>
   </>
@@ -54,22 +58,26 @@ function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
   return (
     <>
-      <ion-list>
-        {mapArray(items, item => (
-          <ion-item>
-            {item.title} ({item.slug})
-          </ion-item>
-        ))}
-      </ion-list>
-      {user ? (
-        <Link href="/preview-ai/add" tagName="ion-button">
-          {addPageTitle}
-        </Link>
-      ) : (
-        <p>
-          You can add preview ai after <Link href="/register">register</Link>.
-        </p>
-      )}
+      <div style="position: relative;">
+        <div style="position: absolute; right: 0; top: 0; display: flex; flex-direction: column; gap: 0.25rem;">
+          <div class="label-container">
+            <div class="class-label">🦞?</div>
+            <progress value="10" max="100"></progress>
+          </div>
+          <div class="label-container">
+            <div class="class-label">💩?</div>
+            <progress value="10" max="100"></progress>
+          </div>
+          <div class="label-container">
+            <div class="class-label">💊?</div>
+            <progress value="10" max="100"></progress>
+          </div>
+        </div>
+        <img
+          src="https://picsum.photos/seed/2/3000/4000"
+          style="height: 100%"
+        />
+      </div>
     </>
   )
 }
