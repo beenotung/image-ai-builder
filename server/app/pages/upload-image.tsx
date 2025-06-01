@@ -24,10 +24,9 @@ import { del } from 'better-sqlite3-proxy'
 import { rm } from 'fs/promises'
 import { join } from 'path'
 import { env } from '../../env.js'
+import { KB } from '@beenotung/tslib/size.js'
 
-let pageTitle = (
-  <Locale en="Upload Image" zh_hk="上傳圖片" zh_cn="上传图片" />
-)
+let pageTitle = <Locale en="Upload Image" zh_hk="上傳圖片" zh_cn="上传图片" />
 let addPageTitle = (
   <Locale
     en="Add Upload Image"
@@ -340,7 +339,7 @@ async function UploadImage(context: ExpressContext) {
   try {
     let user_id = getAuthUserId(context)
     if (!user_id) throw 'not login'
-    let form = createUploadForm()
+    let form = createUploadForm({ maxFileSize: 500 * KB })
     let [fields, files] = await form.parse(req)
     for (let file of files.image || []) {
       proxy.image.push({
