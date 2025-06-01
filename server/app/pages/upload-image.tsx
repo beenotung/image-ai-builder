@@ -25,6 +25,9 @@ import { rm } from 'fs/promises'
 import { join } from 'path'
 import { env } from '../../env.js'
 import { KB } from '@beenotung/tslib/size.js'
+import { dataURItoFile } from '@beenotung/tslib/image.js'
+import { writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
 
 let pageTitle = <Locale en="Upload Image" zh_hk="上傳圖片" zh_cn="上传图片" />
 let addPageTitle = (
@@ -75,7 +78,6 @@ async function pickImage() {
     accept: '.jpg,.png,.webp,.heic,.gif',
     multiple: true,
   })
-  let formData = new FormData()
   for (let _file of files) {
     let { dataUrl, file } = await compressImageFile(_file)
     let imageItem = imageItemTemplate.cloneNode(true)
@@ -91,6 +93,7 @@ async function pickImage() {
     let imageItem = button.closest('.image-item')
     let image = imageItem.querySelector('img')
     let file = image.file
+    if (!file) continue
     let formData = new FormData()
     formData.append('image', file)
     let res = await fetch('/upload-image/submit', {
@@ -167,6 +170,7 @@ function Main(attrs: {}, context: Context) {
         <ion-button onclick={user ? 'pickImage()' : 'goto("/login")'}>
           <ion-icon name="cloud-upload" slot="start"></ion-icon> Upload Photos
         </ion-button>
+        <div id="debugDiv"></div>
         <div id="imageList">
           <ImageItem
             image_url="https://picsum.photos/seed/1/200/300"
@@ -196,7 +200,7 @@ function ImageItem(attrs: {
   return (
     <div class="image-item">
       <div class="image-item--buttons">
-        <ion-button color="primary" disabled class="image-item--upload">
+        <ion-button color="success" disabled class="image-item--upload">
           <ion-icon name="cloud-upload-outline" slot="icon-only"></ion-icon>
         </ion-button>
         <ion-button
