@@ -15,7 +15,7 @@ import { object, string } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
-import { evalLocale, Locale } from '../components/locale.js'
+import { evalLocale, Locale, Title } from '../components/locale.js'
 import { proxy } from '../../../db/proxy.js'
 import { toRouteUrl } from '../../url.js'
 import { db } from '../../../db/db.js'
@@ -86,14 +86,9 @@ function Main(attrs: {}, context: DynamicContext) {
 
 let routes = {
   '/annotate-image': {
-    resolve(context) {
-      let t = evalLocale(pageTitle, context)
-      return {
-        title: title(t),
-        description: 'TODO',
-        node: page,
-      }
-    },
+    title: <Title t={pageTitle} />,
+    description: 'TODO',
+    node: page,
   },
 } satisfies Routes
 

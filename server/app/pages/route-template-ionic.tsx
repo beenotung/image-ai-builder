@@ -14,7 +14,7 @@ import { object, string } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
-import { evalLocale, Locale } from '../components/locale.js'
+import { evalLocale, Locale, Title } from '../components/locale.js'
 
 let pageTitle = <Locale en="__title__" zh_hk="__title__" zh_cn="__title__" />
 let addPageTitle = (
@@ -201,17 +201,12 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
 
 let routes = {
   '/__url__': {
-    resolve(context) {
-      let t = evalLocale(pageTitle, context)
-      return {
-        title: title(t),
-        description: 'TODO',
-        node: page,
-      }
-    },
+    title: <Title t={pageTitle} />,
+    description: 'TODO',
+    node: page,
   },
   '/__url__/add': {
-    title: title(addPageTitle),
+    title: <Title t={addPageTitle} />,
     description: 'TODO',
     node: <AddPage />,
     streaming: false,

@@ -15,7 +15,7 @@ import { renderError } from '../components/error.js'
 import { Content, Page } from '../components/page.js'
 import { BackToLink } from '../components/back-to-link.js'
 import { getAuthUser } from '../auth/user.js'
-import { evalLocale, Locale } from '../components/locale.js'
+import { evalLocale, Locale, Title } from '../components/locale.js'
 import { Button } from '../components/button.js'
 import { IonButton } from '../components/ion-button.js'
 
@@ -244,17 +244,12 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
 let routes = {
   '/__url__': {
     menuText: pageTitle,
-    resolve(context) {
-      let t = evalLocale(pageTitle, context)
-      return {
-        title: title(t),
-        description: 'TODO',
-        node: page,
-      }
-    },
+    title: <Title t={pageTitle} />,
+    description: 'TODO',
+    node: page,
   },
   '/__url__/add': {
-    title: title(addPageTitle),
+    title: <Title t={addPageTitle} />,
     description: 'TODO',
     node: <AddPage />,
     streaming: false,
