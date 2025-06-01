@@ -14,7 +14,7 @@ import { fitIonFooter, selectIonTab } from '../styles/mobile-style.js'
 import { characters } from './app-character.js'
 
 let pageTitle = (
-  <Locale en="Home" zh_hk="首頁" zh_cn="主页" />
+  <Locale en="Home" zh_hk="主頁" zh_cn="主页" />
 )
 
 let style = Style(/* css */ `
