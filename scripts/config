@@ -1,4 +1,4 @@
-user=node
-host=image-ai-builder.cc
-root_dir=/home/node/workspace/github.com/beenotung/image-ai-builder
+user=USER
+host=image-ai-builder.feelingss.ai
+root_dir=/home/USER/image-ai-builder
 pm2_name="image-ai-builder"
