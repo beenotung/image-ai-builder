@@ -13,7 +13,9 @@ import { PageRoute, Routes } from '../routes.js'
 import { fitIonFooter, selectIonTab } from '../styles/mobile-style.js'
 import { characters } from './app-character.js'
 
-let pageTitle = 'Home'
+let pageTitle = (
+  <Locale en="Home" zh_hk="首頁" zh_cn="主页" />
+)
 
 let style = Style(/* css */ `
 /* This explicit height is necessary when using ion-menu */
