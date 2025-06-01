@@ -63,9 +63,15 @@ async function compressImageFile(
       quality = options.quality
     }
   }
-  let dataUrl = resizeImage(image, width, height, 'image/webp', quality)
-  file = dataURItoFile(dataUrl, file)
-  return { dataUrl, file }
+  try {
+    let dataUrl = resizeImage(image, width, height, 'image/webp', quality)
+    file = dataURItoFile(dataUrl, file)
+    return { dataUrl, file }
+  } catch (error) {
+    let dataUrl = resizeImage(image, width, height, 'image/jpeg', quality)
+    file = dataURItoFile(dataUrl, file)
+    return { dataUrl, file }
+  }
 }
 
 Object.assign(window, {
