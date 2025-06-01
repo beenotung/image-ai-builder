@@ -2,7 +2,7 @@ import { loadClientPlugin } from '../../client-plugin.js'
 import { LayoutType, config, title } from '../../config.js'
 import { appIonTabBar } from '../components/app-tab-bar.js'
 import { mapArray } from '../components/fragment.js'
-import { Locale } from '../components/locale.js'
+import { Locale, Title } from '../components/locale.js'
 import { Link } from '../components/router.js'
 import { Script } from '../components/script.js'
 import Style from '../components/style.js'
@@ -13,9 +13,7 @@ import { PageRoute, Routes } from '../routes.js'
 import { fitIonFooter, selectIonTab } from '../styles/mobile-style.js'
 import { characters } from './app-character.js'
 
-let pageTitle = (
-  <Locale en="Home" zh_hk="主頁" zh_cn="主页" />
-)
+let pageTitle = <Locale en="Home" zh_hk="主頁" zh_cn="主页" />
 
 let style = Style(/* css */ `
 /* This explicit height is necessary when using ion-menu */
@@ -109,7 +107,7 @@ let homePage = (
 // homePage = prerender(homePage)
 
 let homeRoute: PageRoute = {
-  title: title(pageTitle),
+  title: <Title t={pageTitle} />,
   description:
     'List of fictional characters commonly used as placeholders in discussion about cryptographic systems and protocols.',
   menuText: 'Ionic App',
