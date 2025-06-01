@@ -17,9 +17,9 @@ import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
 import { proxy } from '../../../db/proxy.js'
 
-let pageTitle = <Locale en="Preview AI" zh_hk="Preview AI" zh_cn="Preview AI" />
+let pageTitle = <Locale en="Preview AI" zh_hk="預覽 AI" zh_cn="预览 AI" />
 let addPageTitle = (
-  <Locale en="Add Preview AI" zh_hk="添加Preview AI" zh_cn="添加Preview AI" />
+  <Locale en="Add Preview AI" zh_hk="添加預覽 AI" zh_cn="添加预览 AI" />
 )
 
 let style = Style(/* css */ `
