@@ -1,10 +1,11 @@
 import { o } from '../jsx/jsx.js'
-import { Routes } from '../routes.js'
+import { ajaxRoute, Routes } from '../routes.js'
 import { apiEndpointTitle, title } from '../../config.js'
 import Style from '../components/style.js'
 import {
   Context,
   DynamicContext,
+  ExpressContext,
   getContextFormBody,
   throwIfInAPI,
 } from '../context.js'
@@ -16,16 +17,11 @@ import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
 import { proxy } from '../../../db/proxy.js'
+import { toRouteUrl } from '../../url.js'
+import { db } from '../../../db/db.js'
 
 let pageTitle = (
   <Locale en="Annotate Image" zh_hk="Annotate Image" zh_cn="Annotate Image" />
-)
-let addPageTitle = (
-  <Locale
-    en="Add Annotate Image"
-    zh_hk="添加Annotate Image"
-    zh_cn="添加Annotate Image"
-  />
 )
 
 let style = Style(/* css */ `
@@ -53,18 +49,15 @@ let page = (
   </>
 )
 
-let items = [
-  { title: 'Android', slug: 'md' },
-  { title: 'iOS', slug: 'ios' },
-]
-
-function Main(attrs: {}, context: Context) {
+function Main(attrs: {}, context: DynamicContext) {
   let user = getAuthUser(context)
+  let params = new URLSearchParams(context.routerMatch?.search)
+  let label_id = +params.get('label')! || 1
   return (
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
         <ion-item>
-          <ion-select value="1" label="Label">
+          <ion-select value={label_id} label="Label">
             {mapArray(proxy.label, label => (
               <ion-select-option value={label.id}>
                 {label.title}
@@ -91,132 +84,6 @@ function Main(attrs: {}, context: Context) {
   )
 }
 
-let addPage = (
-  <>
-    {Style(/* css */ `
-#AddAnnotateImage .hint {
-  margin-inline-start: 1rem;
-  margin-block: 0.25rem;
-}
-`)}
-    <ion-header>
-      <ion-toolbar>
-        <IonBackButton href="/annotate-image" backText={pageTitle} />
-        <ion-title role="heading" aria-level="1">
-          {addPageTitle}
-        </ion-title>
-      </ion-toolbar>
-    </ion-header>
-    <ion-content id="AddAnnotateImage" class="ion-padding">
-      <form
-        method="POST"
-        action="/annotate-image/add/submit"
-        onsubmit="emitForm(event)"
-      >
-        <ion-list>
-          <ion-item>
-            <ion-input
-              name="title"
-              label="Title*:"
-              label-placement="floating"
-              required
-              minlength="3"
-              maxlength="50"
-            />
-          </ion-item>
-          <p class="hint">(3-50 characters)</p>
-          <ion-item>
-            <ion-input
-              name="slug"
-              label="Slug*: (unique url)"
-              label-placement="floating"
-              required
-              pattern="(\w|-|\.){1,32}"
-            />
-          </ion-item>
-          <p class="hint">
-            (1-32 characters of: <code>a-z A-Z 0-9 - _ .</code>)
-          </p>
-        </ion-list>
-        <div style="margin-inline-start: 1rem">
-          <ion-button type="submit">Submit</ion-button>
-        </div>
-        <p>
-          Remark:
-          <br />
-          *: mandatory fields
-        </p>
-        <p id="add-message"></p>
-      </form>
-    </ion-content>
-  </>
-)
-
-function AddPage(attrs: {}, context: DynamicContext) {
-  let user = getAuthUser(context)
-  if (!user) return <Redirect href="/login" />
-  return addPage
-}
-
-let submitParser = object({
-  title: string({ minLength: 3, maxLength: 50 }),
-  slug: string({ match: /^[\w-]{1,32}$/ }),
-})
-
-function Submit(attrs: {}, context: DynamicContext) {
-  try {
-    let user = getAuthUser(context)
-    if (!user) throw 'You must be logged in to submit ' + pageTitle
-    let body = getContextFormBody(context)
-    let input = submitParser.parse(body)
-    let id = items.push({
-      title: input.title,
-      slug: input.slug,
-    })
-    return <Redirect href={`/annotate-image/result?id=${id}`} />
-  } catch (error) {
-    throwIfInAPI(error, '#add-message', context)
-    return (
-      <Redirect
-        href={
-          '/annotate-image/result?' +
-          new URLSearchParams({ error: String(error) })
-        }
-      />
-    )
-  }
-}
-
-function SubmitResult(attrs: {}, context: DynamicContext) {
-  let params = new URLSearchParams(context.routerMatch?.search)
-  let error = params.get('error')
-  let id = params.get('id')
-  return (
-    <>
-      <ion-header>
-        <ion-toolbar>
-          <IonBackButton href="/annotate-image/add" backText="Form" />
-          <ion-title role="heading" aria-level="1">
-            Submitted {pageTitle}
-          </ion-title>
-        </ion-toolbar>
-      </ion-header>
-      <ion-content id="AddAnnotateImage" class="ion-padding">
-        {error ? (
-          renderError(error, context)
-        ) : (
-          <>
-            <p>Your submission is received (#{id}).</p>
-            <Link href="/annotate-image" tagName="ion-button">
-              Back to {pageTitle}
-            </Link>
-          </>
-        )}
-      </ion-content>
-    </>
-  )
-}
-
 let routes = {
   '/annotate-image': {
     resolve(context) {
@@ -227,24 +94,6 @@ let routes = {
         node: page,
       }
     },
-  },
-  '/annotate-image/add': {
-    title: title(addPageTitle),
-    description: 'TODO',
-    node: <AddPage />,
-    streaming: false,
-  },
-  '/annotate-image/add/submit': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <Submit />,
-    streaming: false,
-  },
-  '/annotate-image/result': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <SubmitResult />,
-    streaming: false,
   },
 } satisfies Routes
 
