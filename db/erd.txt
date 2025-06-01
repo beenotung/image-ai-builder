@@ -136,8 +136,17 @@ title text
 dependency_id integer NULL FK >0- label.id
 
 
+image_label
+-----------
+id integer PK
+image_id integer FK >0- image.id
+label_id integer FK >0- label.id
+user_id integer FK >0- user.id
+answer integer
+
+
 # zoom: 1.000
-# view: (-152, 436)
+# view: (253, 509)
 # text-bg: #6495ed
 # text-color: #000000
 # diagram-bg: #f5f5f5
@@ -156,5 +165,6 @@ dependency_id integer NULL FK >0- label.id
 # verification_code (50, 550)
 # verification_attempt (50, 372)
 # content_report (515, 948)
-# image (885, 669)
-# label (884, 865)
+# image (1251, 636)
+# label (1255, 869)
+# image_label (921, 771)
