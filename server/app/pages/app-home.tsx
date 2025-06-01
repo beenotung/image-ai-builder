@@ -2,6 +2,7 @@ import { loadClientPlugin } from '../../client-plugin.js'
 import { LayoutType, config, title } from '../../config.js'
 import { appIonTabBar } from '../components/app-tab-bar.js'
 import { mapArray } from '../components/fragment.js'
+import { Locale } from '../components/locale.js'
 import { Link } from '../components/router.js'
 import { Script } from '../components/script.js'
 import Style from '../components/style.js'
@@ -75,19 +76,19 @@ let homePage = (
       <ion-content class="ion-padding">
         <ion-list>
           <Link tagName="ion-item" href={'/upload-image'}>
-            1. Upload Image
+            1. <Locale en="Upload Image" zh_hk="上傳圖片" zh_cn="上傳圖片" />
           </Link>
           <Link tagName="ion-item" href={'/annotate-image'}>
-            2. Annotate Image
+            2. <Locale en="Annotate Image" zh_hk="標註圖片" zh_cn="標註圖片" />
           </Link>
           <Link tagName="ion-item" href={'/train-ai'}>
-            3. Train AI
+            3. <Locale en="Train AI" zh_hk="訓練 AI" zh_cn="訓練 AI" />
           </Link>
           <Link tagName="ion-item" href={'/preview-ai'}>
-            4. Preview AI
+            4. <Locale en="Preview AI" zh_hk="預覽 AI" zh_cn="預覽 AI" />
           </Link>
           <Link tagName="ion-item" href={'/stats'}>
-            5. Stats
+            5. <Locale en="Stats" zh_hk="統計" zh_cn="統計" />
           </Link>
         </ion-list>
         {wsStatus.safeArea}
