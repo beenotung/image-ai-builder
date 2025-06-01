@@ -70,6 +70,7 @@ var imageItemTemplate = document.querySelector('#imageList .image-item')
 imageItemTemplate.remove()
 
 async function pickImage() {
+  try {
   let files = await selectImage({
     accept: '.jpg,.png,.webp,.heic,.gif',
     multiple: true,
@@ -105,6 +106,9 @@ async function pickImage() {
     image.src = url
     button.setAttribute('color', 'success')
     imageCount.textContent = json.count.toLocaleString()
+  }
+  } catch (error) {
+    showError(error)
   }
 }
 
