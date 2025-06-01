@@ -26,7 +26,7 @@ import { join } from 'path'
 import { env } from '../../env.js'
 
 let pageTitle = (
-  <Locale en="Upload Image" zh_hk="Upload Image" zh_cn="Upload Image" />
+  <Locale en="Upload Image" zh_hk="上傳圖片" zh_cn="上传图片" />
 )
 let addPageTitle = (
   <Locale

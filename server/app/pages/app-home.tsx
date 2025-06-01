@@ -104,7 +104,7 @@ let homePage = (
 )
 
 // pre-render into html to reduce time to first contentful paint (FCP)
-homePage = prerender(homePage)
+// homePage = prerender(homePage)
 
 let homeRoute: PageRoute = {
   title: title(pageTitle),
