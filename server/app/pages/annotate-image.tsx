@@ -15,7 +15,7 @@ import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
 import { id, number, object, string, values } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
-import { renderError } from '../components/error.js'
+import { renderError, showError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale, Title } from '../components/locale.js'
 import { proxy } from '../../../db/proxy.js'
@@ -23,6 +23,7 @@ import { toRouteUrl } from '../../url.js'
 import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
 import { loadClientPlugin } from '../../client-plugin.js'
+import { EarlyTerminate, MessageException } from '../../exception.js'
 
 let imagePlugin = loadClientPlugin({
   entryFile: 'dist/client/image.js',
@@ -43,7 +44,7 @@ function submitAnnotation(answer) {
   let image = label_image
   let image_id = image.dataset.imageId
   let rotation = image.dataset.degree || 0
-  fetch_json('/annotate-image/submit', {
+  emit('/annotate-image/submit', {
     label: label_select.value,
     image: image_id,
     answer,
@@ -103,6 +104,7 @@ function Main(attrs: {}, context: DynamicContext) {
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
         <ion-item>
+          {/* TODO load image of selected label */}
           <ion-select
             value={label_id}
             label={Locale(
@@ -184,7 +186,7 @@ let submitAnnotationParser = object({
     }),
   }),
 })
-async function SubmitAnnotation(attrs: {}, context: WsContext) {
+function SubmitAnnotation(attrs: {}, context: WsContext) {
   try {
     let user = getAuthUser(context)
     if (!user) throw 'You must be logged in to annotate image'
@@ -214,11 +216,24 @@ async function SubmitAnnotation(attrs: {}, context: WsContext) {
       },
     )
 
-    // TODO
     let next_image = select_next_image.get({ label_id: input.label })
-    return { next_image }
+    context.ws.send([
+      'update-attrs',
+      '#label_image',
+      {
+        'src': next_image ? `/uploads/${next_image.filename}` : '',
+        'data-image-id': next_image ? next_image.id : '',
+        'data-rotation': 0,
+      },
+    ])
+    throw EarlyTerminate
   } catch (error) {
-    return { error: String(error) }
+    if (error === EarlyTerminate) {
+      throw error
+    }
+    console.error(error)
+    context.ws.send(showError(error))
+    throw EarlyTerminate
   }
 }
 
