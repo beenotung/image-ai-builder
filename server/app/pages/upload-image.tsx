@@ -172,7 +172,6 @@ function Main(attrs: {}, context: Context) {
         <ion-button onclick={user ? 'pickImage()' : 'goto("/login")'}>
           <ion-icon name="cloud-upload" slot="start"></ion-icon> Upload Photos
         </ion-button>
-        <div id="debugDiv"></div>
         <div id="imageList">
           <ImageItem
             image_url="https://picsum.photos/seed/1/200/300"

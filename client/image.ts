@@ -63,11 +63,8 @@ async function compressImageFile(
       quality = options.quality
     }
   }
-  let debugDiv = document.getElementById('debugDiv')!
-  debugDiv.textContent = `compressing ${file.name} to ${width}x${height} with quality ${quality} (jpeg)`
   let dataUrl = resizeImage(image, width, height, 'image/jpeg', quality)
   file = dataURItoFile(dataUrl, file)
-  debugDiv.textContent = `compressed ${file.name}, size: ${format_byte(file.size)}, type: ${file.type}, prefix: ${dataUrl.slice(0, 20)}`
   return { dataUrl, file }
 }
 
