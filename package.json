@@ -40,7 +40,7 @@
     ]
   },
   "dependencies": {
-    "@beenotung/tslib": "^23.12.1",
+    "@beenotung/tslib": "^24.9.0",
     "@ionic/core": "^8.5.5",
     "argon2": "^0.41.1",
     "better-sqlite3-proxy": "^2.11.1",

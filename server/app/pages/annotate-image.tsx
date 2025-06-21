@@ -20,6 +20,11 @@ import { proxy } from '../../../db/proxy.js'
 import { toRouteUrl } from '../../url.js'
 import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
+import { loadClientPlugin } from '../../client-plugin.js'
+
+let imagePlugin = loadClientPlugin({
+  entryFile: 'dist/client/image.js',
+})
 
 let pageTitle = <Locale en="Annotate Image" zh_hk="標註圖片" zh_cn="注释图像" />
 
@@ -56,6 +61,8 @@ let page = (
     <ion-content id="AnnotateImage" class="ion-no-padding">
       <Main />
     </ion-content>
+    {imagePlugin.node}
+    {script}
   </>
 )
 
@@ -100,7 +107,8 @@ function Main(attrs: {}, context: DynamicContext) {
             id="label_image"
             src={image ? `/uploads/${image.filename}` : ''}
             alt="no images to be annotated, please select another label"
-            style="height: 100%"
+            style="height: 100%; object-fit: contain"
+            onclick="rotateImageInline(this)"
           />
         </div>
         <div style="display: flex;" class="control-buttons">
