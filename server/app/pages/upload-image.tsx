@@ -87,6 +87,8 @@ async function pickImage() {
     imageItem.querySelector('.image-item--filename').textContent = file.name
     imageList.appendChild(imageItem)
     let uploadButton = imageItem.querySelector('.image-item--upload')
+    uploadButton.setAttribute('color', 'primary')
+    uploadButton.removeAttribute('disabled')
   }
   let buttons = imageList.querySelectorAll('.image-item--upload[color="primary"]')
   for (let button of buttons) {
