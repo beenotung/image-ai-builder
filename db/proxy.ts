@@ -112,6 +112,7 @@ export type Image = {
   filename: string
   user_id: number
   user?: User
+  rotation: null | number
 }
 
 export type Label = {

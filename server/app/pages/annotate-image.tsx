@@ -2,16 +2,18 @@ import { o } from '../jsx/jsx.js'
 import { ajaxRoute, Routes } from '../routes.js'
 import { apiEndpointTitle, title } from '../../config.js'
 import Style from '../components/style.js'
+import { seedRow } from 'better-sqlite3-proxy'
 import {
   Context,
   DynamicContext,
   ExpressContext,
   getContextFormBody,
   throwIfInAPI,
+  WsContext,
 } from '../context.js'
 import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
-import { object, string } from 'cast.ts'
+import { id, number, object, string, values } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
@@ -38,12 +40,26 @@ let style = Style(/* css */ `
 
 let script = Script(/* js */ `
 function submitAnnotation(answer) {
-  emit('')
+  let image = label_image
+  let image_id = image.dataset.imageId
+  let rotation = image.dataset.degree || 0
+  fetch_json('/annotate-image/submit', {
+    label: label_select.value,
+    image: image_id,
+    answer,
+    rotation,
+  })
 }
 function redoAnnotation() {
   let label_select = document.getElementById('label_select')
   let label_id = label_select.value
   let image_to_annotate = document.getElementById('label_image')
+}
+function rotateAnnotationImage(image) {
+  let degree = image.dataset.rotation || 0
+  degree = (degree + 90) % 360
+  image.dataset.rotation = degree
+  rotateImageInline(image)
 }
 `)
 
@@ -104,11 +120,12 @@ function Main(attrs: {}, context: DynamicContext) {
         </ion-item>
         <div style="flex-grow: 1; overflow: hidden">
           <img
+            data-image-id={image?.id}
             id="label_image"
             src={image ? `/uploads/${image.filename}` : ''}
             alt="no images to be annotated, please select another label"
             style="height: 100%; object-fit: contain"
-            onclick="rotateImageInline(this)"
+            onclick="rotateAnnotationImage(this)"
           />
         </div>
         <div style="display: flex;" class="control-buttons">
@@ -157,25 +174,49 @@ async function getNextImage(context: ExpressContext) {
   }
 }
 
-async function submitAnnotation(context: ExpressContext) {
-  let { req } = context
+let submitAnnotationParser = object({
+  args: object({
+    0: object({
+      label: id(),
+      image: id(),
+      answer: values([0, 1]),
+      rotation: number(),
+    }),
+  }),
+})
+async function SubmitAnnotation(attrs: {}, context: WsContext) {
   try {
     let user = getAuthUser(context)
     if (!user) throw 'You must be logged in to annotate image'
-    let label_id = +req.query.label!
-    if (!label_id) throw 'missing label'
-    let image_id = +req.query.image!
-    if (!image_id) throw 'missing image'
-    let answer = req.query.answer!
-    if (answer !== '0' && answer !== '1') throw 'invalid answer'
-    proxy.image_label.push({
-      label_id,
-      image_id,
-      user_id: user.id!,
-      answer: +answer,
-    })
-    let image = select_next_image.get({ label_id })
-    return { image }
+
+    let {
+      args: { 0: input },
+    } = submitAnnotationParser.parse(context)
+    let label = proxy.label[input.label]
+    let image = proxy.image[input.image]
+
+    if (!label) throw 'label not found'
+    if (!image) throw 'image not found'
+
+    if (image.rotation !== input.rotation) {
+      image.rotation = input.rotation
+    }
+
+    seedRow(
+      proxy.image_label,
+      {
+        label_id: label.id!,
+        image_id: image.id!,
+        user_id: user.id!,
+      },
+      {
+        answer: +input.answer,
+      },
+    )
+
+    // TODO
+    let next_image = select_next_image.get({ label_id: input.label })
+    return { next_image }
   } catch (error) {
     return { error: String(error) }
   }
@@ -191,10 +232,11 @@ let routes = {
     description: 'get next image to be annotated',
     api: getNextImage,
   }),
-  '/annotate-image/submit': ajaxRoute({
-    description: 'submit annotation',
-    api: submitAnnotation,
-  }),
+  '/annotate-image/submit': {
+    title: apiEndpointTitle,
+    description: 'submit image annotation',
+    node: <SubmitAnnotation />,
+  },
 } satisfies Routes
 
 export default { routes }

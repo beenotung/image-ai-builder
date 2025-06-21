@@ -127,6 +127,7 @@ id integer PK
 original_filename text NULL
 filename text
 user_id integer FK >0- user.id
+rotation integer NULL
 
 
 label

@@ -355,6 +355,7 @@ async function UploadImage(context: ExpressContext) {
         original_filename: file.originalFilename || null,
         filename: file.newFilename,
         user_id,
+        rotation: null,
       })
       let url = '/uploads/' + file.newFilename
       res.json({ url, count: proxy.image.length })
