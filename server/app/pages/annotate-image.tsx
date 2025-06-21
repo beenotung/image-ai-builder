@@ -21,9 +21,7 @@ import { toRouteUrl } from '../../url.js'
 import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
 
-let pageTitle = (
-  <Locale en="Annotate Image" zh_hk="標註圖片" zh_cn="注释图像" />
-)
+let pageTitle = <Locale en="Annotate Image" zh_hk="標註圖片" zh_cn="注释图像" />
 
 let style = Style(/* css */ `
 #AnnotateImage .control-buttons ion-button {
@@ -82,7 +80,14 @@ function Main(attrs: {}, context: DynamicContext) {
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
         <ion-item>
-          <ion-select value={label_id} label={Locale({en:"Class Label", zh_hk: "類別標籤", zh_cn: "类別标签"},context)} id="label_select">
+          <ion-select
+            value={label_id}
+            label={Locale(
+              { en: 'Class Label', zh_hk: '類別標籤', zh_cn: '类別标签' },
+              context,
+            )}
+            id="label_select"
+          >
             {mapArray(proxy.label, label => (
               <ion-select-option value={label.id}>
                 {label.title} ({count_image.get({ label_id: label.id! })})
