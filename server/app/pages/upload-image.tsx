@@ -20,7 +20,7 @@ import { proxy, User } from '../../../db/proxy.js'
 import { loadClientPlugin } from '../../client-plugin.js'
 import { Script } from '../components/script.js'
 import { createUploadForm } from '../upload.js'
-import { del } from 'better-sqlite3-proxy'
+import { del, find } from 'better-sqlite3-proxy'
 import { rm } from 'fs/promises'
 import { join } from 'path'
 import { env } from '../../env.js'
@@ -372,11 +372,16 @@ async function RemoveImage(context: ExpressContext) {
   try {
     let { filename } = req.query
     if (typeof filename !== 'string') throw 'filename is required'
-    del(proxy.image, { filename })
+    let image = find(proxy.image, { filename })
+    if (image) {
+      del(proxy.image_label, { image_id: image.id! })
+      del(proxy.image, { filename })
+    }
     let file = join(env.UPLOAD_DIR, filename)
     await rm(file, { force: true })
     res.json({ count: proxy.image.length })
   } catch (error) {
+    console.error(error)
     res.json({ error: String(error) })
   }
 }
