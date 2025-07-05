@@ -1,3 +1,4 @@
+import { count } from 'better-sqlite3-proxy'
 import { o } from '../jsx/jsx.js'
 import { Routes } from '../routes.js'
 import { apiEndpointTitle, title } from '../../config.js'
@@ -15,15 +16,52 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
+import { proxy } from '../../../db/proxy.js'
 
-let pageTitle = <Locale en="Stats" zh_hk="Stats" zh_cn="Stats" />
-let addPageTitle = (
-  <Locale en="Add Stats" zh_hk="添加Stats" zh_cn="添加Stats" />
-)
+let pageTitle = <Locale en="Stats Data" zh_hk="统计数据" zh_cn="统计数据" />
 
 let style = Style(/* css */ `
 #Stats {
-
+}
+.stats-label-count {
+  color: var(--ion-color-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--ion-color-primary);
+  text-decoration-thickness: 0.125rem;
+  text-underline-offset: 0.25rem;
+}
+.stats-item {
+  margin-bottom: 1.5rem;
+}
+.stats-label {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.stats-chart {
+  display: flex;
+  flex-direction: row;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+.stats-chart--bar {
+  padding: 0.5rem;
+  text-align: center;
+}
+.stats-chart--bar[data-label="yes"] {
+  background-color: green;
+  color: white;
+  border-top-left-radius: 0.5rem;
+  border-bottom-left-radius: 0.5rem;
+}
+.stats-chart--bar[data-label="unknown"] {
+  background-color: lightgray;
+  color: black;
+}
+.stats-chart--bar[data-label="no"] {
+  background-color: red;
+  color: white;
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
 }
 `)
 
@@ -32,170 +70,68 @@ let page = (
     {style}
     <ion-header>
       <ion-toolbar>
-        <IonBackButton href="/" backText="Home" />
+        <IonBackButton href="/" />
         <ion-title role="heading" aria-level="1">
           {pageTitle}
         </ion-title>
       </ion-toolbar>
     </ion-header>
-    <ion-content id="Stats" class="ion-padding">
-      Items
+    <ion-content id="Stats" class="ion-no-padding" color="light">
       <Main />
     </ion-content>
   </>
 )
 
-let items = [
-  { title: 'Android', slug: 'md' },
-  { title: 'iOS', slug: 'ios' },
-]
-
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
+  let totalCount = <span class="stats-label-count">{proxy.label.length}</span>
   return (
     <>
-      <ion-list>
-        {mapArray(items, item => (
-          <ion-item>
-            {item.title} ({item.slug})
-          </ion-item>
-        ))}
-      </ion-list>
-      {user ? (
-        <Link href="/stats/add" tagName="ion-button">
-          {addPageTitle}
-        </Link>
-      ) : (
-        <p>
-          You can add stats after <Link href="/register">register</Link>.
-        </p>
-      )}
+      <h2 class="ion-padding-horizontal">
+        <ion-icon name="stats-chart" />{' '}
+        <Locale
+          en={<>Total {totalCount} types of labels</>}
+          zh_hk={<>總共 {totalCount} 種標籤</>}
+          zh_cn={<>总共 {totalCount} 种标签</>}
+        />
+      </h2>
+      {mapArray(proxy.label, label => {
+        let label_id = label.id!
+        count(proxy.image_label, { label_id })
+        let yes = Math.floor(Math.random() * 100)
+        let unknown = Math.floor(Math.random() * 100)
+        let no = Math.floor(Math.random() * 100)
+        return (
+          <ion-card class="stats-item">
+            <ion-card-content>
+              <div class="stats-label">{label.title}</div>
+              <StatsChart yes={yes} unknown={unknown} no={no} />
+            </ion-card-content>
+          </ion-card>
+        )
+      })}
     </>
   )
 }
 
-let addPage = (
-  <>
-    {Style(/* css */ `
-#AddStats .hint {
-  margin-inline-start: 1rem;
-  margin-block: 0.25rem;
-}
-`)}
-    <ion-header>
-      <ion-toolbar>
-        <IonBackButton href="/stats" backText={pageTitle} />
-        <ion-title role="heading" aria-level="1">
-          {addPageTitle}
-        </ion-title>
-      </ion-toolbar>
-    </ion-header>
-    <ion-content id="AddStats" class="ion-padding">
-      <form
-        method="POST"
-        action="/stats/add/submit"
-        onsubmit="emitForm(event)"
-      >
-        <ion-list>
-          <ion-item>
-            <ion-input
-              name="title"
-              label="Title*:"
-              label-placement="floating"
-              required
-              minlength="3"
-              maxlength="50"
-            />
-          </ion-item>
-          <p class="hint">(3-50 characters)</p>
-          <ion-item>
-            <ion-input
-              name="slug"
-              label="Slug*: (unique url)"
-              label-placement="floating"
-              required
-              pattern="(\w|-|\.){1,32}"
-            />
-          </ion-item>
-          <p class="hint">
-            (1-32 characters of: <code>a-z A-Z 0-9 - _ .</code>)
-          </p>
-        </ion-list>
-        <div style="margin-inline-start: 1rem">
-          <ion-button type="submit">Submit</ion-button>
-        </div>
-        <p>
-          Remark:
-          <br />
-          *: mandatory fields
-        </p>
-        <p id="add-message"></p>
-      </form>
-    </ion-content>
-  </>
-)
-
-function AddPage(attrs: {}, context: DynamicContext) {
-  let user = getAuthUser(context)
-  if (!user) return <Redirect href="/login" />
-  return addPage
-}
-
-let submitParser = object({
-  title: string({ minLength: 3, maxLength: 50 }),
-  slug: string({ match: /^[\w-]{1,32}$/ }),
-})
-
-function Submit(attrs: {}, context: DynamicContext) {
-  try {
-    let user = getAuthUser(context)
-    if (!user) throw 'You must be logged in to submit ' + pageTitle
-    let body = getContextFormBody(context)
-    let input = submitParser.parse(body)
-    let id = items.push({
-      title: input.title,
-      slug: input.slug,
-    })
-    return <Redirect href={`/stats/result?id=${id}`} />
-  } catch (error) {
-    throwIfInAPI(error, '#add-message', context)
-    return (
-      <Redirect
-        href={
-          '/stats/result?' + new URLSearchParams({ error: String(error) })
-        }
-      />
-    )
-  }
-}
-
-function SubmitResult(attrs: {}, context: DynamicContext) {
-  let params = new URLSearchParams(context.routerMatch?.search)
-  let error = params.get('error')
-  let id = params.get('id')
+function StatsChart(attrs: { yes: number; unknown: number; no: number }) {
+  let { yes, unknown, no } = attrs
   return (
-    <>
-      <ion-header>
-        <ion-toolbar>
-          <IonBackButton href="/stats/add" backText="Form" />
-          <ion-title role="heading" aria-level="1">
-            Submitted {pageTitle}
-          </ion-title>
-        </ion-toolbar>
-      </ion-header>
-      <ion-content id="AddStats" class="ion-padding">
-        {error ? (
-          renderError(error, context)
-        ) : (
-          <>
-            <p>Your submission is received (#{id}).</p>
-            <Link href="/stats" tagName="ion-button">
-              Back to {pageTitle}
-            </Link>
-          </>
-        )}
-      </ion-content>
-    </>
+    <div class="stats-chart">
+      <div class="stats-chart--bar" data-label="yes" style={`flex: ${yes};`}>
+        {yes}
+      </div>
+      <div
+        class="stats-chart--bar"
+        data-label="unknown"
+        style={`flex: ${unknown};`}
+      >
+        {unknown}
+      </div>
+      <div class="stats-chart--bar" data-label="no" style={`flex: ${no};`}>
+        {no}
+      </div>
+    </div>
   )
 }
 
@@ -209,24 +145,6 @@ let routes = {
         node: page,
       }
     },
-  },
-  '/stats/add': {
-    title: title(addPageTitle),
-    description: 'TODO',
-    node: <AddPage />,
-    streaming: false,
-  },
-  '/stats/add/submit': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <Submit />,
-    streaming: false,
-  },
-  '/stats/result': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <SubmitResult />,
-    streaming: false,
   },
 } satisfies Routes
 
