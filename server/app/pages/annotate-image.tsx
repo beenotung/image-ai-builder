@@ -124,23 +124,87 @@ function Main(attrs: {}, context: DynamicContext) {
           <img
             data-image-id={image?.id}
             id="label_image"
-            src={image ? `/uploads/${image.filename}` : ''}
-            alt="no images to be annotated, please select another label"
+            src={`/uploads/${image?.filename}`}
+            alt={
+              <Locale
+                en="Loading image..."
+                zh_hk="載入圖片中..."
+                zh_cn="加载图像中..."
+              />
+            }
             style="height: 100%; object-fit: contain"
             onclick="rotateAnnotationImage(this)"
+            hidden={!image}
           />
+          <div
+            style="display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 2rem;"
+            hidden={!!image}
+          >
+            <div>
+              <ion-icon
+                name="checkmark-circle"
+                style="font-size: 4rem; color: var(--ion-color-success);"
+              ></ion-icon>
+              <h2>
+                <Locale
+                  en="All images annotated!"
+                  zh_hk="所有圖片已標註完成！"
+                  zh_cn="所有图像已注释完成！"
+                />
+              </h2>
+              <p>
+                <Locale
+                  en="You have completed annotating all images for this label."
+                  zh_hk="您已完成此標籤的所有圖片標註。"
+                  zh_cn="您已完成此标签的所有图像注释。"
+                />
+              </p>
+              <p>
+                <Locale
+                  en="Please select another label to continue."
+                  zh_hk="請選擇另一個標籤繼續。"
+                  zh_cn="请选择另一个标签继续。"
+                />
+              </p>
+            </div>
+          </div>
         </div>
         <div style="display: flex;" class="control-buttons">
-          <ion-button size="large" color="danger" onclick="submitAnnotation(0)">
+          <ion-button
+            size="large"
+            color="danger"
+            onclick="submitAnnotation(0)"
+            title={
+              <Locale
+                en="Annotate as not having the label"
+                zh_hk="標註為沒有標籤"
+                zh_cn="标注为没有标签"
+              />
+            }
+            disabled={!image}
+          >
             <ion-icon name="close" slot="icon-only"></ion-icon>
           </ion-button>
-          <ion-button size="large" color="dark" onclick="undoAnnotation()">
-            <ion-icon name="arrow-undo" slot="icon-only"></ion-icon>
+          <ion-button
+            size="large"
+            color="warning"
+            onclick="submitAnnotation(2)"
+            title={<Locale en="Undo" zh_hk="還原" zh_cn="还原" />}
+          >
+            <ion-icon name="refresh" slot="icon-only"></ion-icon>
           </ion-button>
           <ion-button
             size="large"
             color="success"
             onclick="submitAnnotation(1)"
+            title={
+              <Locale
+                en="Annotate as having the label"
+                zh_hk="標註為有標籤"
+                zh_cn="标注为有标签"
+              />
+            }
+            disabled={!image}
           >
             <ion-icon name="checkmark" slot="icon-only"></ion-icon>
           </ion-button>
