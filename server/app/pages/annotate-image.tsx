@@ -1,6 +1,6 @@
 import { o } from '../jsx/jsx.js'
 import { ajaxRoute, Routes } from '../routes.js'
-import { apiEndpointTitle, title } from '../../config.js'
+import { apiEndpointTitle } from '../../config.js'
 import Style from '../components/style.js'
 import { seedRow } from 'better-sqlite3-proxy'
 import {
@@ -13,8 +13,7 @@ import {
 } from '../context.js'
 import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
-import { id, number, object, string, values } from 'cast.ts'
-import { Link, Redirect } from '../components/router.js'
+import { id, number, object, values } from 'cast.ts'
 import { renderError, showError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale, Title } from '../components/locale.js'
@@ -41,11 +40,11 @@ let style = Style(/* css */ `
 
 let script = Script(/* js */ `
 function submitAnnotation(answer) {
-  let image = label_image
+  let image = document.getElementById('label_image')
   let image_id = image.dataset.imageId
-  let rotation = image.dataset.degree || 0
+  let rotation = image.dataset.rotation || 0
   emit('/annotate-image/submit', {
-    label: label_select.value,
+    label: document.getElementById('label_select').value,
     image: image_id,
     answer,
     rotation,
@@ -95,8 +94,27 @@ where id not in (
   )
   .pluck()
 
+// Count total images for each label
+let count_total_images = db
+  .prepare<{ label_id: number }, number>(
+    /* sql */ `
+select count(*) from image
+`,
+  )
+  .pluck()
+
+// Count annotated images for each label
+let count_annotated_images = db
+  .prepare<{ label_id: number }, number>(
+    /* sql */ `
+select count(*) from image_label
+where label_id = :label_id
+`,
+  )
+  .pluck()
+
 function Main(attrs: {}, context: DynamicContext) {
-  let user = getAuthUser(context)
+  let _user = getAuthUser(context)
   let params = new URLSearchParams(context.routerMatch?.search)
   let label_id = +params.get('label')! || 1
   let image = select_next_image.get({ label_id })
@@ -113,38 +131,55 @@ function Main(attrs: {}, context: DynamicContext) {
             )}
             id="label_select"
           >
-            {mapArray(proxy.label, label => (
-              <ion-select-option value={label.id}>
-                {label.title} ({count_image.get({ label_id: label.id! })})
-              </ion-select-option>
-            ))}
+            {mapArray(proxy.label, label => {
+              let total_images = count_total_images.get({ label_id: label.id! })
+              let annotated_images = count_annotated_images.get({ label_id: label.id! })
+              return (
+                <ion-select-option value={label.id}>
+                  {label.title} ({annotated_images}/{total_images})
+                </ion-select-option>
+              )
+            })}
           </ion-select>
         </ion-item>
         <div style="flex-grow: 1; overflow: hidden">
-          <img
-            data-image-id={image?.id}
-            id="label_image"
-            src={image ? `/uploads/${image.filename}` : ''}
-            alt="no images to be annotated, please select another label"
-            style="height: 100%; object-fit: contain"
-            onclick="rotateAnnotationImage(this)"
-          />
+          {image ? (
+            <img
+              data-image-id={image.id}
+              id="label_image"
+              src={`/uploads/${image.filename}`}
+              alt="image to be annotated"
+              style="height: 100%; object-fit: contain"
+              onclick="rotateAnnotationImage(this)"
+            />
+          ) : (
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 2rem;">
+              <div>
+                <ion-icon name="checkmark-circle" style="font-size: 4rem; color: var(--ion-color-success);"></ion-icon>
+                <h2>All images annotated!</h2>
+                <p>You have completed annotating all images for this label.</p>
+                <p>Please select another label to continue.</p>
+              </div>
+            </div>
+          )}
         </div>
-        <div style="display: flex;" class="control-buttons">
-          <ion-button size="large" color="danger" onclick="submitAnnotation(0)">
-            <ion-icon name="close" slot="icon-only"></ion-icon>
-          </ion-button>
-          <ion-button size="large" color="dark" onclick="undoAnnotation()">
-            <ion-icon name="arrow-undo" slot="icon-only"></ion-icon>
-          </ion-button>
-          <ion-button
-            size="large"
-            color="success"
-            onclick="submitAnnotation(1)"
-          >
-            <ion-icon name="checkmark" slot="icon-only"></ion-icon>
-          </ion-button>
-        </div>
+        {image && (
+          <div style="display: flex;" class="control-buttons">
+            <ion-button size="large" color="danger" onclick="submitAnnotation(0)">
+              <ion-icon name="close" slot="icon-only"></ion-icon>
+            </ion-button>
+            <ion-button size="large" color="dark" onclick="undoAnnotation()">
+              <ion-icon name="arrow-undo" slot="icon-only"></ion-icon>
+            </ion-button>
+            <ion-button
+              size="large"
+              color="success"
+              onclick="submitAnnotation(1)"
+            >
+              <ion-icon name="checkmark" slot="icon-only"></ion-icon>
+            </ion-button>
+          </div>
+        )}
       </div>
     </>
   )
@@ -216,16 +251,13 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
       },
     )
 
-    let next_image = select_next_image.get({ label_id: input.label })
+    // Force a page refresh to update the counts and show next image (or completion message)
+    // This is the simplest way to ensure the counts are updated and handle the no-more-images case
     context.ws.send([
-      'update-attrs',
-      '#label_image',
-      {
-        'src': next_image ? `/uploads/${next_image.filename}` : '',
-        'data-image-id': next_image ? next_image.id : '',
-        'data-rotation': 0,
-      },
+      'redirect',
+      '/annotate-image?label=' + input.label
     ])
+    
     throw EarlyTerminate
   } catch (error) {
     if (error === EarlyTerminate) {
