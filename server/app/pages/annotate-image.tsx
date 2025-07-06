@@ -56,6 +56,31 @@ function redoAnnotation() {
   let label_id = label_select.value
   let image_to_annotate = document.getElementById('label_image')
 }
+
+//Send undo annotation request
+function undoAnnotation() {
+  let lab_select = document.getElementById('label_select')
+  let label_id = label_select.value
+  emit('/annotate-image/undo', {
+    label: label_id,
+  })
+}
+
+// Show image (Not finished / can't use onchange="")
+function showImage() {
+  console.log('showImage function')
+  /*
+  let label_select = document.getElementById('label_select')
+  let label_id = label_select.value
+  if (!label_id) {
+    return
+  }
+  emit('/annotate-image/image', {
+    label: label_select.value,
+  })
+  */
+}
+
 function rotateAnnotationImage(image) {
   let degree = image.dataset.rotation || 0
   degree = (degree + 90) % 360
@@ -112,6 +137,7 @@ function Main(attrs: {}, context: DynamicContext) {
               context,
             )}
             id="label_select"
+            onIonChange={'showImage()'} //not working
           >
             {mapArray(proxy.label, label => (
               <ion-select-option value={label.id}>
@@ -176,6 +202,87 @@ async function getNextImage(context: ExpressContext) {
   }
 }
 
+// Undo annotation: Not Used
+let undoAnnotationParser = object({
+  args: object({
+    0: object({
+      label: id(), //send label_id to server
+    }),
+  }),
+})
+
+// SQL: Delete latest image_label in current user
+let delete_previous_image_label = db.prepare<{ user_id: number }>(/* sql */ `
+delete from image_label
+where user_id = :user_id
+order by created_at desc
+limit 1
+`)
+
+// SQL: Select latest image_label in current user
+let select_previous_image_label = db.prepare<
+  { user_id: number; label_id: number },
+  { image_id: number; label_id: number }
+>(/* sql */ `
+select image_id, label_id from image_label
+where user_id = :user_id and label_id = :label_id
+order by created_at desc
+limit 1
+`)
+
+// Undo annotation: delete latest annotation in current user
+function UndoAnnotation(attrs: {}, context: WsContext) {
+  try {
+    let user = getAuthUser(context)
+    if (!user) throw 'You must be logged in to undo annotation'
+    let user_id = user.id
+
+    let {
+      args: { 0: input },
+    } = undoAnnotationParser.parse(context)
+
+    //console.log('user id type', typeof user_id)
+    console.log('userID ', user_id, 'label_id', input.label)
+
+    // delete, show previous image
+    if (user_id) {
+      //select latest label_id, image_id
+      let row = select_previous_image_label.get({
+        user_id,
+        label_id: input.label,
+      })
+      if (!row) throw 'No previous annotation to undo'
+
+      //set previous image for annotation
+      let image = proxy.image[row.image_id]
+      if (!image) throw 'Image not found'
+
+      //delete latest image_label
+      delete_previous_image_label.run({ user_id })
+
+      //show previous image
+      context.ws.send([
+        'update-attrs',
+        '#label_image',
+        {
+          'src': image ? `/uploads/${image.filename}` : '',
+          'data-image-id': image ? image.id : '',
+          'data-rotation': 0,
+        },
+      ])
+    }
+
+    throw EarlyTerminate
+  } catch (error) {
+    if (error === EarlyTerminate) {
+      throw error
+    }
+    console.error(error)
+    context.ws.send(showError(error))
+    throw EarlyTerminate
+  }
+}
+
 let submitAnnotationParser = object({
   args: object({
     0: object({
@@ -194,6 +301,12 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     let {
       args: { 0: input },
     } = submitAnnotationParser.parse(context)
+
+    //console.log('submitAnnotation', input)
+    //console.log('user', user)
+    //console.log('input', input)
+    //console.log('args', context.args)
+
     let label = proxy.label[input.label]
     let image = proxy.image[input.image]
 
@@ -251,6 +364,11 @@ let routes = {
     title: apiEndpointTitle,
     description: 'submit image annotation',
     node: <SubmitAnnotation />,
+  },
+  '/annotate-image/undo': {
+    title: apiEndpointTitle,
+    description: 'undo image annotation',
+    node: <UndoAnnotation />,
   },
 } satisfies Routes
 
