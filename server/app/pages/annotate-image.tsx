@@ -50,11 +50,6 @@ function submitAnnotation(answer) {
     rotation,
   })
 }
-function redoAnnotation() {
-  let label_select = document.getElementById('label_select')
-  let label_id = label_select.value
-  let image_to_annotate = document.getElementById('label_image')
-}
 function rotateAnnotationImage(image) {
   let degree = image.dataset.rotation || 0
   degree = (degree + 90) % 360
@@ -113,11 +108,25 @@ where label_id = :label_id
   )
   .pluck()
 
+let select_next_image = db.prepare<
+  { label_id: number; user_id: number },
+  { id: number; filename: string }
+>(/* sql */ `
+select image.id, image.filename
+from image
+where id not in (
+  select image_id from image_label
+  where label_id = :label_id and user_id = :user_id
+)
+order by image.id
+limit 1
+`)
+
 function Main(attrs: {}, context: DynamicContext) {
-  let _user = getAuthUser(context)
+  let user = getAuthUser(context)
   let params = new URLSearchParams(context.routerMatch?.search)
   let label_id = +params.get('label')! || 1
-  let image = select_next_image.get({ label_id })
+  let image = user ? select_next_image.get({ label_id, user_id: user.id! }) : null
   return (
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
@@ -156,25 +165,44 @@ function Main(attrs: {}, context: DynamicContext) {
             <div style="display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 2rem;">
               <div>
                 <ion-icon name="checkmark-circle" style="font-size: 4rem; color: var(--ion-color-success);"></ion-icon>
-                <h2>All images annotated!</h2>
-                <p>You have completed annotating all images for this label.</p>
-                <p>Please select another label to continue.</p>
+                <h2>
+                  <Locale 
+                    en="All images annotated!" 
+                    zh_hk="所有圖片已標註完成！" 
+                    zh_cn="所有图像已注释完成！" 
+                  />
+                </h2>
+                <p>
+                  <Locale 
+                    en="You have completed annotating all images for this label." 
+                    zh_hk="您已完成此標籤的所有圖片標註。" 
+                    zh_cn="您已完成此标签的所有图像注释。" 
+                  />
+                </p>
+                <p>
+                  <Locale 
+                    en="Please select another label to continue." 
+                    zh_hk="請選擇另一個標籤繼續。" 
+                    zh_cn="请选择另一个标签继续。" 
+                  />
+                </p>
               </div>
             </div>
           )}
         </div>
         {image && (
           <div style="display: flex;" class="control-buttons">
-            <ion-button size="large" color="danger" onclick="submitAnnotation(0)">
+            <ion-button size="large" color="danger" onclick="submitAnnotation(0)" title="Not Included">
               <ion-icon name="close" slot="icon-only"></ion-icon>
             </ion-button>
-            <ion-button size="large" color="dark" onclick="undoAnnotation()">
-              <ion-icon name="arrow-undo" slot="icon-only"></ion-icon>
+            <ion-button size="large" color="warning" onclick="submitAnnotation(2)" title="Skip/Redo">
+              <ion-icon name="refresh" slot="icon-only"></ion-icon>
             </ion-button>
             <ion-button
               size="large"
               color="success"
               onclick="submitAnnotation(1)"
+              title="Included"
             >
               <ion-icon name="checkmark" slot="icon-only"></ion-icon>
             </ion-button>
@@ -185,18 +213,6 @@ function Main(attrs: {}, context: DynamicContext) {
   )
 }
 
-let select_next_image = db.prepare<
-  { label_id: number },
-  { id: number; filename: string }
->(/* sql */ `
-select image.id, image.filename
-from image
-where id not in (
-  select image_id from image_label
-  where label_id = :label_id
-)
-`)
-
 async function getNextImage(context: ExpressContext) {
   let { req } = context
   try {
@@ -204,7 +220,7 @@ async function getNextImage(context: ExpressContext) {
     if (!user) throw 'You must be logged in to annotate image'
     let label_id = +req.query.label!
     if (!label_id) throw 'missing label'
-    let image = select_next_image.get({ label_id })
+    let image = select_next_image.get({ label_id, user_id: user.id! })
     return { image }
   } catch (error) {
     return { error: String(error) }
@@ -216,7 +232,7 @@ let submitAnnotationParser = object({
     0: object({
       label: id(),
       image: id(),
-      answer: values([0, 1]),
+      answer: values([0, 1, 2]), // 0 = not included, 1 = included, 2 = skip/redo
       rotation: number(),
     }),
   }),
@@ -239,17 +255,20 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
       image.rotation = input.rotation
     }
 
-    seedRow(
-      proxy.image_label,
-      {
-        label_id: label.id!,
-        image_id: image.id!,
-        user_id: user.id!,
-      },
-      {
-        answer: +input.answer,
-      },
-    )
+    // Only save annotation if it's not a skip/redo (answer = 2)
+    if (input.answer !== 2) {
+      seedRow(
+        proxy.image_label,
+        {
+          label_id: label.id!,
+          image_id: image.id!,
+          user_id: user.id!,
+        },
+        {
+          answer: +input.answer,
+        },
+      )
+    }
 
     // Force a page refresh to update the counts and show next image (or completion message)
     // This is the simplest way to ensure the counts are updated and handle the no-more-images case
