@@ -1,8 +1,8 @@
 import { o } from '../jsx/jsx.js'
 import { ajaxRoute, Routes } from '../routes.js'
-import { apiEndpointTitle, title } from '../../config.js'
+import { apiEndpointTitle } from '../../config.js'
 import Style from '../components/style.js'
-import { seedRow } from 'better-sqlite3-proxy'
+import { count, seedRow } from 'better-sqlite3-proxy'
 import {
   Context,
   DynamicContext,
@@ -13,8 +13,7 @@ import {
 } from '../context.js'
 import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
-import { id, number, object, string, values } from 'cast.ts'
-import { Link, Redirect } from '../components/router.js'
+import { id, number, object, values } from 'cast.ts'
 import { renderError, showError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale, Title } from '../components/locale.js'
@@ -42,20 +41,15 @@ let style = Style(/* css */ `
 
 let script = Script(/* js */ `
 function submitAnnotation(answer) {
-  let image = label_image
+  let image = document.getElementById('label_image')
   let image_id = image.dataset.imageId
-  let rotation = image.dataset.degree || 0
+  let rotation = image.dataset.rotation || 0
   emit('/annotate-image/submit', {
-    label: label_select.value,
+    label: document.getElementById('label_select').value,
     image: image_id,
     answer,
     rotation,
   })
-}
-function redoAnnotation() {
-  let label_select = document.getElementById('label_select')
-  let label_id = label_select.value
-  let image_to_annotate = document.getElementById('label_image')
 }
 function rotateAnnotationImage(image) {
   let degree = image.dataset.rotation || 0
@@ -116,7 +110,10 @@ function Main(attrs: {}, context: DynamicContext) {
   }
   let params = new URLSearchParams(context.routerMatch?.search)
   let label_id = +params.get('label')! || 1
-  let image = select_next_image.get({ label_id })
+  let image = user
+    ? select_next_image.get({ label_id, user_id: user.id! })
+    : null
+  let total_images = proxy.image.length
   return (
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
@@ -246,6 +243,8 @@ where id not in (
   select image_id from image_label
   where label_id = :label_id
 )
+order by random()
+limit 1
 `)
 
 async function getNextImage(context: ExpressContext) {
@@ -267,7 +266,7 @@ let submitAnnotationParser = object({
     0: object({
       label: id(),
       image: id(),
-      answer: values([0, 1]),
+      answer: values([0, 1, 2]), // 0 = not included, 1 = included, 2 = skip/redo
       rotation: number(),
     }),
   }),
@@ -290,28 +289,25 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
       image.rotation = input.rotation
     }
 
-    seedRow(
-      proxy.image_label,
-      {
-        label_id: label.id!,
-        image_id: image.id!,
-        user_id: user.id!,
-      },
-      {
-        answer: +input.answer,
-      },
-    )
+    // Only save annotation if it's not a skip/redo (answer = 2)
+    if (input.answer !== 2) {
+      seedRow(
+        proxy.image_label,
+        {
+          label_id: label.id!,
+          image_id: image.id!,
+          user_id: user.id!,
+        },
+        {
+          answer: +input.answer,
+        },
+      )
+    }
 
-    let next_image = select_next_image.get({ label_id: input.label })
-    context.ws.send([
-      'update-attrs',
-      '#label_image',
-      {
-        'src': next_image ? `/uploads/${next_image.filename}` : '',
-        'data-image-id': next_image ? next_image.id : '',
-        'data-rotation': 0,
-      },
-    ])
+    // Force a page refresh to update the counts and show next image (or completion message)
+    // This is the simplest way to ensure the counts are updated and handle the no-more-images case
+    context.ws.send(['redirect', '/annotate-image?label=' + input.label])
+
     throw EarlyTerminate
   } catch (error) {
     if (error === EarlyTerminate) {
