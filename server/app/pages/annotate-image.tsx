@@ -42,7 +42,7 @@ let script = Script(/* js */ `
 function submitAnnotation(answer) {
   let image = label_image
   let image_id = image.dataset.imageId
-  let rotation = image.dataset.degree || 0
+  let rotation = image.dataset.rotation || 0
   emit('/annotate-image/submit', {
     label: label_select.value,
     image: image_id,
@@ -143,11 +143,13 @@ function Main(attrs: {}, context: DynamicContext) {
         <div style="flex-grow: 1; overflow: hidden">
           <img
             data-image-id={image?.id}
+            data-rotation={image?.rotation || 0}
             id="label_image"
             src={image ? `/uploads/${image.filename}` : ''}
             alt="no images to be annotated, please select another label"
             style="height: 100%; object-fit: contain"
             onclick="rotateAnnotationImage(this)"
+            onload="rotateImageInline(this); this.onload = null"
           />
         </div>
         <div style="display: flex;" class="control-buttons">
@@ -172,9 +174,9 @@ function Main(attrs: {}, context: DynamicContext) {
 
 let select_next_image = db.prepare<
   { label_id: number },
-  { id: number; filename: string }
+  { id: number; filename: string; rotation: number | null }
 >(/* sql */ `
-select image.id, image.filename
+select image.id, image.filename, image.rotation
 from image
 where id not in (
   select image_id from image_label
@@ -249,13 +251,22 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
 
     // TODO update the counts
     context.ws.send([
-      'update-attrs',
-      '#label_image',
-      {
-        'src': `/uploads/${image.filename}`,
-        'data-image-id': image.id,
-        'data-rotation': image.rotation || 0,
-      },
+      'batch',
+      [
+        [
+          'update-attrs',
+          '#label_image',
+          {
+            'src': `/uploads/${image.filename}`,
+            'data-image-id': image.id,
+            'data-rotation': image.rotation || 0,
+          },
+        ],
+        [
+          'eval',
+          `label_image.onload = () => { rotateImageInline(label_image); label_image.onload = null }`,
+        ],
+      ],
     ])
     // TODO disable / enable undo button
 
