@@ -83,14 +83,12 @@ let page = (
   </>
 )
 
-let count_image = db
+let count_annotated_images = db
   .prepare<{ label_id: number }, number>(
     /* sql */ `
-select count(*) from image
-where id not in (
-  select image_id from image_label
-  where label_id = :label_id
-)
+select count(distinct image_id)
+from image_label
+where label_id = :label_id
 `,
   )
   .pluck()
@@ -113,11 +111,16 @@ function Main(attrs: {}, context: DynamicContext) {
             )}
             id="label_select"
           >
-            {mapArray(proxy.label, label => (
-              <ion-select-option value={label.id}>
-                {label.title} ({count_image.get({ label_id: label.id! })})
-              </ion-select-option>
-            ))}
+            {mapArray(proxy.label, label => {
+              let annotated_images = count_annotated_images.get({
+                label_id: label.id!,
+              })
+              return (
+                <ion-select-option value={label.id}>
+                  {label.title} ({annotated_images}/{total_images})
+                </ion-select-option>
+              )
+            })}
           </ion-select>
         </ion-item>
         <div style="flex-grow: 1; overflow: hidden">
