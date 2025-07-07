@@ -20,6 +20,7 @@ import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
 import { loadClientPlugin } from '../../client-plugin.js'
 import { EarlyTerminate } from '../../exception.js'
+import { IonButton } from '../components/ion-button.js'
 
 let sweetAlertPlugin = loadClientPlugin({
   entryFile: 'dist/client/sweetalert.js',
@@ -114,6 +115,24 @@ where label_id = :label_id
 
 function Main(attrs: {}, context: DynamicContext) {
   let user = getAuthUser(context)
+  if (!user) {
+    return (
+      <>
+        <div style="margin: auto; width: fit-content; text-align: center;">
+          <p class="ion-padding ion-margin error">
+            <Locale
+              en="You must be logged in to annotate images"
+              zh_hk="您必須登入才能標註圖片"
+              zh_cn="您必须登录才能标注图像"
+            />
+          </p>
+          <IonButton url="/login" color="primary">
+            <Locale en="Login" zh_hk="登入" zh_cn="登录" />
+          </IonButton>
+        </div>
+      </>
+    )
+  }
   let params = new URLSearchParams(context.routerMatch?.search)
   let label_id = +params.get('label')! || 1
   let image = select_next_image.get({ label_id })
