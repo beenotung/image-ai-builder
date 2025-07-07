@@ -51,18 +51,12 @@ function submitAnnotation(answer) {
     rotation,
   })
 }
-function redoAnnotation() {
-  let label_select = document.getElementById('label_select')
-  let label_id = label_select.value
-  let image_to_annotate = document.getElementById('label_image')
-}
 
-//Send undo annotation request
+// Send undo annotation request
 function undoAnnotation() {
-  let lab_select = document.getElementById('label_select')
   let label_id = label_select.value
   emit('/annotate-image/undo', {
-    label: label_id,
+    label_id
   })
 }
 
@@ -202,75 +196,57 @@ async function getNextImage(context: ExpressContext) {
   }
 }
 
-// Undo annotation: Not Used
-let undoAnnotationParser = object({
-  args: object({
-    0: object({
-      label: id(), //send label_id to server
-    }),
-  }),
-})
-
-// SQL: Delete latest image_label in current user
-let delete_previous_image_label = db.prepare<{ user_id: number }>(/* sql */ `
-delete from image_label
-where user_id = :user_id
-order by created_at desc
-limit 1
-`)
-
-// SQL: Select latest image_label in current user
+// select last image_label in current user (for undo)
 let select_previous_image_label = db.prepare<
   { user_id: number; label_id: number },
-  { image_id: number; label_id: number }
+  { id: number; image_id: number }
 >(/* sql */ `
-select image_id, label_id from image_label
-where user_id = :user_id and label_id = :label_id
+select
+  id
+, image_id
+from image_label
+where user_id = :user_id
+  and label_id = :label_id
 order by created_at desc
 limit 1
 `)
 
-// Undo annotation: delete latest annotation in current user
+let undoAnnotationParser = object({
+  label_id: id(),
+})
+
+// delete latest annotation in current user, and return to display
 function UndoAnnotation(attrs: {}, context: WsContext) {
   try {
     let user = getAuthUser(context)
     if (!user) throw 'You must be logged in to undo annotation'
-    let user_id = user.id
+    let user_id = user.id!
 
-    let {
-      args: { 0: input },
-    } = undoAnnotationParser.parse(context)
+    let body = getContextFormBody(context)
+    let input = undoAnnotationParser.parse(body)
+    let label_id = input.label_id
 
-    //console.log('user id type', typeof user_id)
-    console.log('userID ', user_id, 'label_id', input.label)
+    let last_annotation = select_previous_image_label.get({
+      user_id,
+      label_id,
+    })
+    if (!last_annotation) throw 'No previous annotation to undo'
 
-    // delete, show previous image
-    if (user_id) {
-      //select latest label_id, image_id
-      let row = select_previous_image_label.get({
-        user_id,
-        label_id: input.label,
-      })
-      if (!row) throw 'No previous annotation to undo'
+    let image = proxy.image[last_annotation.image_id]
 
-      //set previous image for annotation
-      let image = proxy.image[row.image_id]
-      if (!image) throw 'Image not found'
+    delete proxy.image_label[last_annotation.id]
 
-      //delete latest image_label
-      delete_previous_image_label.run({ user_id })
-
-      //show previous image
-      context.ws.send([
-        'update-attrs',
-        '#label_image',
-        {
-          'src': image ? `/uploads/${image.filename}` : '',
-          'data-image-id': image ? image.id : '',
-          'data-rotation': 0,
-        },
-      ])
-    }
+    // TODO update the counts
+    context.ws.send([
+      'update-attrs',
+      '#label_image',
+      {
+        'src': `/uploads/${image.filename}`,
+        'data-image-id': image.id,
+        'data-rotation': image.rotation || 0,
+      },
+    ])
+    // TODO disable / enable undo button
 
     throw EarlyTerminate
   } catch (error) {
