@@ -25,6 +25,9 @@ import { Script } from '../components/script.js'
 import { loadClientPlugin } from '../../client-plugin.js'
 import { EarlyTerminate, MessageException } from '../../exception.js'
 
+let sweetAlertPlugin = loadClientPlugin({
+  entryFile: 'dist/client/sweetalert.js',
+})
 let imagePlugin = loadClientPlugin({
   entryFile: 'dist/client/image.js',
 })
@@ -98,6 +101,7 @@ let page = (
       <Main />
     </ion-content>
     {imagePlugin.node}
+    {sweetAlertPlugin.node}
     {script}
   </>
 )
