@@ -320,12 +320,6 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     let {
       args: { 0: input },
     } = submitAnnotationParser.parse(context)
-
-    //console.log('submitAnnotation', input)
-    //console.log('user', user)
-    //console.log('input', input)
-    //console.log('args', context.args)
-
     let label = proxy.label[input.label]
     let image = proxy.image[input.image]
 
