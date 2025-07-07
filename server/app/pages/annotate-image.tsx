@@ -1,30 +1,29 @@
 import { o } from '../jsx/jsx.js'
 import { ajaxRoute, Routes } from '../routes.js'
-import { apiEndpointTitle, title } from '../../config.js'
+import { apiEndpointTitle } from '../../config.js'
 import Style from '../components/style.js'
 import { seedRow } from 'better-sqlite3-proxy'
 import {
-  Context,
   DynamicContext,
   ExpressContext,
   getContextFormBody,
-  throwIfInAPI,
   WsContext,
 } from '../context.js'
 import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
-import { id, number, object, string, values } from 'cast.ts'
-import { Link, Redirect } from '../components/router.js'
-import { renderError, showError } from '../components/error.js'
-import { getAuthUser } from '../auth/user.js'
-import { evalLocale, Locale, Title } from '../components/locale.js'
+import { id, number, object, values } from 'cast.ts'
+import { showError } from '../components/error.js'
+import { getAuthUser, getAuthUserId } from '../auth/user.js'
+import { Locale, makeThrows, Title } from '../components/locale.js'
 import { proxy } from '../../../db/proxy.js'
-import { toRouteUrl } from '../../url.js'
 import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
 import { loadClientPlugin } from '../../client-plugin.js'
-import { EarlyTerminate, MessageException } from '../../exception.js'
+import { EarlyTerminate } from '../../exception.js'
 
+let sweetAlertPlugin = loadClientPlugin({
+  entryFile: 'dist/client/sweetalert.js',
+})
 let imagePlugin = loadClientPlugin({
   entryFile: 'dist/client/image.js',
 })
@@ -51,11 +50,30 @@ function submitAnnotation(answer) {
     rotation,
   })
 }
-function redoAnnotation() {
+
+// Send undo annotation request
+function undoAnnotation() {
+  let label_id = label_select.value
+  emit('/annotate-image/undo', {
+    label_id
+  })
+}
+
+// Show image (Not finished / can't use onchange="")
+function showImage() {
+  console.log('showImage function')
+  /*
   let label_select = document.getElementById('label_select')
   let label_id = label_select.value
-  let image_to_annotate = document.getElementById('label_image')
+  if (!label_id) {
+    return
+  }
+  emit('/annotate-image/image', {
+    label: label_select.value,
+  })
+  */
 }
+
 function rotateAnnotationImage(image) {
   let degree = image.dataset.rotation || 0
   degree = (degree + 90) % 360
@@ -79,6 +97,7 @@ let page = (
       <Main />
     </ion-content>
     {imagePlugin.node}
+    {sweetAlertPlugin.node}
     {script}
   </>
 )
@@ -112,6 +131,7 @@ function Main(attrs: {}, context: DynamicContext) {
               context,
             )}
             id="label_select"
+            onIonChange={'showImage()'} //not working
           >
             {mapArray(proxy.label, label => (
               <ion-select-option value={label.id}>
@@ -176,6 +196,79 @@ async function getNextImage(context: ExpressContext) {
   }
 }
 
+// select last image_label in current user (for undo)
+let select_previous_image_label = db.prepare<
+  { user_id: number; label_id: number },
+  { id: number; image_id: number }
+>(/* sql */ `
+select
+  id
+, image_id
+from image_label
+where user_id = :user_id
+  and label_id = :label_id
+order by created_at desc
+limit 1
+`)
+
+let undoAnnotationParser = object({
+  label_id: id(),
+})
+
+// delete latest annotation in current user, and return to display
+function UndoAnnotation(attrs: {}, context: WsContext) {
+  try {
+    let throws = makeThrows(context)
+
+    let user_id = getAuthUserId(context)!
+    if (!user_id)
+      throws({
+        en: 'You must be logged in to undo annotation',
+        zh_hk: '您必須登入才能還原標註',
+        zh_cn: '您必须登录才能还原标注',
+      })
+
+    let body = getContextFormBody(context)
+    let input = undoAnnotationParser.parse(body)
+    let label_id = input.label_id
+
+    let last_annotation = select_previous_image_label.get({
+      user_id,
+      label_id,
+    })!
+    if (!last_annotation)
+      throws({
+        en: 'No previous annotation to undo',
+        zh_hk: '沒有之前的標註可以還原',
+        zh_cn: '没有之前的标注可以还原',
+      })
+
+    let image = proxy.image[last_annotation.image_id]
+
+    delete proxy.image_label[last_annotation.id]
+
+    // TODO update the counts
+    context.ws.send([
+      'update-attrs',
+      '#label_image',
+      {
+        'src': `/uploads/${image.filename}`,
+        'data-image-id': image.id,
+        'data-rotation': image.rotation || 0,
+      },
+    ])
+    // TODO disable / enable undo button
+
+    throw EarlyTerminate
+  } catch (error) {
+    if (error !== EarlyTerminate) {
+      console.error(error)
+      context.ws.send(showError(error))
+    }
+    throw EarlyTerminate
+  }
+}
+
 let submitAnnotationParser = object({
   args: object({
     0: object({
@@ -194,6 +287,12 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     let {
       args: { 0: input },
     } = submitAnnotationParser.parse(context)
+
+    //console.log('submitAnnotation', input)
+    //console.log('user', user)
+    //console.log('input', input)
+    //console.log('args', context.args)
+
     let label = proxy.label[input.label]
     let image = proxy.image[input.image]
 
@@ -251,6 +350,11 @@ let routes = {
     title: apiEndpointTitle,
     description: 'submit image annotation',
     node: <SubmitAnnotation />,
+  },
+  '/annotate-image/undo': {
+    title: apiEndpointTitle,
+    description: 'undo image annotation',
+    node: <UndoAnnotation />,
   },
 } satisfies Routes
 
