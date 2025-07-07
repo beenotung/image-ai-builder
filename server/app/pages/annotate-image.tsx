@@ -16,8 +16,8 @@ import { IonBackButton } from '../components/ion-back-button.js'
 import { id, number, object, string, values } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
 import { renderError, showError } from '../components/error.js'
-import { getAuthUser } from '../auth/user.js'
-import { evalLocale, Locale, Title } from '../components/locale.js'
+import { getAuthUser, getAuthUserId } from '../auth/user.js'
+import { evalLocale, Locale, makeThrows, Title } from '../components/locale.js'
 import { proxy } from '../../../db/proxy.js'
 import { toRouteUrl } from '../../url.js'
 import { db } from '../../../db/db.js'
@@ -222,9 +222,15 @@ let undoAnnotationParser = object({
 // delete latest annotation in current user, and return to display
 function UndoAnnotation(attrs: {}, context: WsContext) {
   try {
-    let user = getAuthUser(context)
-    if (!user) throw 'You must be logged in to undo annotation'
-    let user_id = user.id!
+    let throws = makeThrows(context)
+
+    let user_id = getAuthUserId(context)!
+    if (!user_id)
+      throws({
+        en: 'You must be logged in to undo annotation',
+        zh_hk: '您必須登入才能還原標註',
+        zh_cn: '您必须登录才能还原标注',
+      })
 
     let body = getContextFormBody(context)
     let input = undoAnnotationParser.parse(body)
@@ -233,8 +239,13 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
     let last_annotation = select_previous_image_label.get({
       user_id,
       label_id,
-    })
-    if (!last_annotation) throw 'No previous annotation to undo'
+    })!
+    if (!last_annotation)
+      throws({
+        en: 'No previous annotation to undo',
+        zh_hk: '沒有之前的標註可以還原',
+        zh_cn: '没有之前的标注可以还原',
+      })
 
     let image = proxy.image[last_annotation.image_id]
 
@@ -254,11 +265,10 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
 
     throw EarlyTerminate
   } catch (error) {
-    if (error === EarlyTerminate) {
-      throw error
+    if (error !== EarlyTerminate) {
+      console.error(error)
+      context.ws.send(showError(error))
     }
-    console.error(error)
-    context.ws.send(showError(error))
     throw EarlyTerminate
   }
 }
