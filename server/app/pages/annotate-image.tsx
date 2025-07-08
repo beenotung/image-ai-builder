@@ -20,6 +20,7 @@ import { db } from '../../../db/db.js'
 import { Script } from '../components/script.js'
 import { loadClientPlugin } from '../../client-plugin.js'
 import { EarlyTerminate } from '../../exception.js'
+import { last } from '@beenotung/tslib'
 
 let sweetAlertPlugin = loadClientPlugin({
   entryFile: 'dist/client/sweetalert.js',
@@ -143,16 +144,28 @@ function Main(attrs: {}, context: DynamicContext) {
           />
         </div>
         <div style="display: flex;" class="control-buttons">
-          <ion-button size="large" color="danger" onclick="submitAnnotation(0)">
+          <ion-button
+            size="large"
+            color="danger"
+            onclick="submitAnnotation(0)"
+            id="btn_submit_reject"
+          >
             <ion-icon name="close" slot="icon-only"></ion-icon>
           </ion-button>
-          <ion-button size="large" color="dark" onclick="undoAnnotation()">
+          <ion-button
+            size="large"
+            color="dark"
+            onclick="undoAnnotation()"
+            id="btn_undo"
+            disabled="false"
+          >
             <ion-icon name="arrow-undo" slot="icon-only"></ion-icon>
           </ion-button>
           <ion-button
             size="large"
             color="success"
             onclick="submitAnnotation(1)"
+            id="btn_submit_agree"
           >
             <ion-icon name="checkmark" slot="icon-only"></ion-icon>
           </ion-button>
@@ -238,13 +251,36 @@ function ShowImage(attrs: {}, context: WsContext) {
     // check if label exists
     let next_image = select_next_image.get({ label_id })
 
+    // always enable undo button (change label show image)
+    context.ws.send(['update-attrs', '#btn_undo', { disabled: false }])
+
     // if no image found, return error
     if (!next_image) {
+      // if no image found, disable submit AGREE & REJECT button
+      context.ws.send(['update-attrs', '#btn_submit_agree', { disabled: true }])
+      context.ws.send([
+        'update-attrs',
+        '#btn_submit_reject',
+        { disabled: true },
+      ])
+
       throws({
         en: 'No images to be annotated, please select another label, or undo annotation',
         zh_hk: '沒有圖片可以標註，請選擇另一個標籤, 或還原標註',
         zh_cn: '没有图片可以注释，请选择另一个标签, 或还原标注',
       })
+    } else {
+      // if image found, enable submit AGREE & REJECT button
+      context.ws.send([
+        'update-attrs',
+        '#btn_submit_agree',
+        { disabled: false },
+      ])
+      context.ws.send([
+        'update-attrs',
+        '#btn_submit_reject',
+        { disabled: false },
+      ])
     }
 
     // load image from database
@@ -292,13 +328,16 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
       user_id,
       label_id,
     })!
-    if (!last_annotation)
+    if (!last_annotation) {
+      // if no previous image > disable undo button
+      context.ws.send(['update-attrs', '#btn_undo', { disabled: true }])
+
       throws({
         en: 'No previous annotation to undo',
         zh_hk: '沒有之前的標註可以還原',
         zh_cn: '没有之前的标注可以还原',
       })
-
+    }
     let image = proxy.image[last_annotation.image_id]
 
     delete proxy.image_label[last_annotation.id]
@@ -313,7 +352,11 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
         'data-rotation': image.rotation || 0,
       },
     ])
-    // TODO disable / enable undo button
+    // TODO disable / enable undo button (finished/wait confirmation)
+
+    // if undo successfully, allow submit AGREE & REJECT button
+    context.ws.send(['update-attrs', '#btn_submit_agree', { disabled: false }])
+    context.ws.send(['update-attrs', '#btn_submit_reject', { disabled: false }])
 
     throw EarlyTerminate
   } catch (error) {
@@ -367,15 +410,41 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     )
 
     let next_image = select_next_image.get({ label_id: input.label })
-    context.ws.send([
-      'update-attrs',
-      '#label_image',
-      {
-        'src': next_image ? `/uploads/${next_image.filename}` : '',
-        'data-image-id': next_image ? next_image.id : '',
-        'data-rotation': 0,
-      },
-    ])
+    if (next_image) {
+      // if found next image, update image src
+      context.ws.send([
+        'update-attrs',
+        '#label_image',
+        {
+          'src': next_image ? `/uploads/${next_image.filename}` : '',
+          'data-image-id': next_image ? next_image.id : '',
+          'data-rotation': 0,
+        },
+      ])
+    } else {
+      // if no image found, clear current image
+      context.ws.send([
+        'update-attrs',
+        '#label_image',
+        {
+          'src': '',
+          'data-image-id': '',
+          'data-rotation': 0,
+        },
+      ])
+      // disable AGREE
+      context.ws.send(['update-attrs', '#btn_submit_agree', { disabled: true }])
+      // disable REJECT
+      context.ws.send([
+        'update-attrs',
+        '#btn_submit_reject',
+        { disabled: true },
+      ])
+    }
+
+    // if submit successfully, allow undo button
+    context.ws.send(['update-attrs', '#btn_undo', { disabled: false }])
+
     throw EarlyTerminate
   } catch (error) {
     if (error === EarlyTerminate) {
