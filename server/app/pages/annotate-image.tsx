@@ -51,27 +51,20 @@ function submitAnnotation(answer) {
   })
 }
 
+// Show image (Not finished / can't use onchange="")
+label_select.addEventListener('ionChange', function(event) {
+  console.log('label_select changed ', label_select.value)
+  emit('/annotate-image/showImage', {
+    label_id: label_select.value,
+  })
+})
+
 // Send undo annotation request
 function undoAnnotation() {
   let label_id = label_select.value
   emit('/annotate-image/undo', {
     label_id
   })
-}
-
-// Show image (Not finished / can't use onchange="")
-function showImage() {
-  console.log('showImage function')
-  /*
-  let label_select = document.getElementById('label_select')
-  let label_id = label_select.value
-  if (!label_id) {
-    return
-  }
-  emit('/annotate-image/image', {
-    label: label_select.value,
-  })
-  */
 }
 
 function rotateAnnotationImage(image) {
@@ -131,7 +124,6 @@ function Main(attrs: {}, context: DynamicContext) {
               context,
             )}
             id="label_select"
-            onIonChange={'showImage()'} //not working
           >
             {mapArray(proxy.label, label => (
               <ion-select-option value={label.id}>
@@ -211,6 +203,70 @@ order by created_at desc
 limit 1
 `)
 
+// select next image > annotate
+let showImageParser = object({
+  label_id: id(),
+})
+
+function ShowImage(attrs: {}, context: WsContext) {
+  try {
+    let throws = makeThrows(context)
+
+    let user_id = getAuthUserId(context)!
+    if (!user_id)
+      throws({
+        en: 'You must be logged in to show image',
+        zh_hk: '您必須登入才能顯示圖片',
+        zh_cn: '您必须登录才能显示图片',
+      })
+
+    let body = getContextFormBody(context)
+    let input = showImageParser.parse(body)
+    let label_id = input.label_id
+
+    // clear current image
+    context.ws.send([
+      'update-attrs',
+      '#label_image',
+      {
+        'src': '',
+        'data-image-id': '',
+        'data-rotation': 0,
+      },
+    ])
+
+    // check if label exists
+    let next_image = select_next_image.get({ label_id })
+
+    // if no image found, return error
+    if (!next_image) {
+      throws({
+        en: 'No images to be annotated, please select another label, or undo annotation',
+        zh_hk: '沒有圖片可以標註，請選擇另一個標籤, 或還原標註',
+        zh_cn: '没有图片可以注释，请选择另一个标签, 或还原标注',
+      })
+    }
+
+    // load image from database
+    context.ws.send([
+      'update-attrs',
+      '#label_image',
+      {
+        'src': next_image ? `/uploads/${next_image.filename}` : '',
+        'data-image-id': next_image ? next_image.id : '',
+        'data-rotation': 0,
+      },
+    ])
+    throw EarlyTerminate
+  } catch (error) {
+    if (error !== EarlyTerminate) {
+      console.error(error)
+      context.ws.send(showError(error))
+    }
+    throw EarlyTerminate
+  }
+}
+
 let undoAnnotationParser = object({
   label_id: id(),
 })
@@ -288,11 +344,6 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
       args: { 0: input },
     } = submitAnnotationParser.parse(context)
 
-    //console.log('submitAnnotation', input)
-    //console.log('user', user)
-    //console.log('input', input)
-    //console.log('args', context.args)
-
     let label = proxy.label[input.label]
     let image = proxy.image[input.image]
 
@@ -355,6 +406,11 @@ let routes = {
     title: apiEndpointTitle,
     description: 'undo image annotation',
     node: <UndoAnnotation />,
+  },
+  '/annotate-image/showImage': {
+    title: apiEndpointTitle,
+    description: 'show image for selected label',
+    node: <ShowImage />,
   },
 } satisfies Routes
 
