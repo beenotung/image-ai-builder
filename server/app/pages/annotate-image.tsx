@@ -40,6 +40,17 @@ let style = Style(/* css */ `
 `)
 
 let script = Script(/* js */ `
+
+// show corresponding image
+showImage();
+
+// show image request
+function showImage(){
+  emit('/annotate-image/showImage', {
+    label_id: label_select.value,
+  })
+}
+
 function submitAnnotation(answer) {
   let image = label_image
   let image_id = image.dataset.imageId
@@ -149,6 +160,7 @@ function Main(attrs: {}, context: DynamicContext) {
             color="danger"
             onclick="submitAnnotation(0)"
             id="btn_submit_reject"
+            disable="true"
           >
             <ion-icon name="close" slot="icon-only"></ion-icon>
           </ion-button>
@@ -157,7 +169,7 @@ function Main(attrs: {}, context: DynamicContext) {
             color="dark"
             onclick="undoAnnotation()"
             id="btn_undo"
-            disabled="false"
+            disabled="true"
           >
             <ion-icon name="arrow-undo" slot="icon-only"></ion-icon>
           </ion-button>
@@ -166,6 +178,7 @@ function Main(attrs: {}, context: DynamicContext) {
             color="success"
             onclick="submitAnnotation(1)"
             id="btn_submit_agree"
+            disable="true"
           >
             <ion-icon name="checkmark" slot="icon-only"></ion-icon>
           </ion-button>
@@ -251,9 +264,6 @@ function ShowImage(attrs: {}, context: WsContext) {
     // check if label exists
     let next_image = select_next_image.get({ label_id })
 
-    // always enable undo button (change label show image)
-    context.ws.send(['update-attrs', '#btn_undo', { disabled: false }])
-
     // if no image found, return error
     if (!next_image) {
       // if no image found, disable submit AGREE & REJECT button
@@ -263,12 +273,6 @@ function ShowImage(attrs: {}, context: WsContext) {
         '#btn_submit_reject',
         { disabled: true },
       ])
-
-      throws({
-        en: 'No images to be annotated, please select another label, or undo annotation',
-        zh_hk: '沒有圖片可以標註，請選擇另一個標籤, 或還原標註',
-        zh_cn: '没有图片可以注释，请选择另一个标签, 或还原标注',
-      })
     } else {
       // if image found, enable submit AGREE & REJECT button
       context.ws.send([
@@ -281,6 +285,19 @@ function ShowImage(attrs: {}, context: WsContext) {
         '#btn_submit_reject',
         { disabled: false },
       ])
+    }
+
+    // if found previous image on current label & user > enable undo button
+    let last_annotation = select_previous_image_label.get({
+      user_id,
+      label_id,
+    })!
+
+    // enable undo button
+    if (last_annotation) {
+      context.ws.send(['update-attrs', '#btn_undo', { disabled: false }])
+    } else {
+      context.ws.send(['update-attrs', '#btn_undo', { disabled: true }])
     }
 
     // load image from database
@@ -328,31 +345,45 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
       user_id,
       label_id,
     })!
-    if (!last_annotation) {
-      // if no previous image > disable undo button
-      context.ws.send(['update-attrs', '#btn_undo', { disabled: true }])
 
-      throws({
-        en: 'No previous annotation to undo',
-        zh_hk: '沒有之前的標註可以還原',
-        zh_cn: '没有之前的标注可以还原',
-      })
+    // if (!last_annotation) {
+    //   // if no previous image > disable undo button
+    //   context.ws.send(['update-attrs', '#btn_undo', { disabled: true }])
+    //   throws({
+    //     en: 'No previous annotation to undo',
+    //     zh_hk: '沒有之前的標註可以還原',
+    //     zh_cn: '没有之前的标注可以还原',
+    //   })
+    // }
+
+    // undo action > reload image
+    if (last_annotation) {
+      let image = proxy.image[last_annotation.image_id]
+      delete proxy.image_label[last_annotation.id]
+
+      // TODO update the counts
+      context.ws.send([
+        'update-attrs',
+        '#label_image',
+        {
+          'src': `/uploads/${image.filename}`,
+          'data-image-id': image.id,
+          'data-rotation': image.rotation || 0,
+        },
+      ])
     }
-    let image = proxy.image[last_annotation.image_id]
 
-    delete proxy.image_label[last_annotation.id]
-
-    // TODO update the counts
-    context.ws.send([
-      'update-attrs',
-      '#label_image',
-      {
-        'src': `/uploads/${image.filename}`,
-        'data-image-id': image.id,
-        'data-rotation': image.rotation || 0,
-      },
-    ])
     // TODO disable / enable undo button (finished/wait confirmation)
+    // double check exits previous image if undo finished
+    last_annotation = select_previous_image_label.get({
+      user_id,
+      label_id,
+    })!
+
+    // if no previous image found, disable undo button
+    if (!last_annotation) {
+      context.ws.send(['update-attrs', '#btn_undo', { disabled: true }])
+    }
 
     // if undo successfully, allow submit AGREE & REJECT button
     context.ws.send(['update-attrs', '#btn_submit_agree', { disabled: false }])
@@ -378,6 +409,7 @@ let submitAnnotationParser = object({
     }),
   }),
 })
+
 function SubmitAnnotation(attrs: {}, context: WsContext) {
   try {
     let user = getAuthUser(context)
