@@ -25,6 +25,11 @@ let style = Style(/* css */ `
 #TrainAI {
 
 }
+ion-range::part(pin) { /*always show pin number*/
+  bborder-radius: 50%;
+  transform: scale(1.01);
+  top: -20px;
+}
 `)
 
 let page = (
@@ -39,7 +44,7 @@ let page = (
       </ion-toolbar>
     </ion-header>
     <ion-content id="TrainAI" class="ion-padding">
-      Items
+      Model Training Setting
       <Main />
     </ion-content>
   </>
@@ -50,11 +55,13 @@ let items = [
   { title: 'iOS', slug: 'ios' },
 ]
 
+
 function Main(attrs: {}, context: Context) {
+
   let user = getAuthUser(context)
   return (
     <>
-      <ion-list>
+      {/* <ion-list>
         {mapArray(items, item => (
           <ion-item>
             {item.title} ({item.slug})
@@ -69,10 +76,17 @@ function Main(attrs: {}, context: Context) {
         <p>
           You can add train ai after <Link href="/register">register</Link>.
         </p>
-      )}
+      )} */}
+      <ion-range id="learning_rate" labelPlacement="start" label="Learning Rate: " step="0.01" pin ticks snaps value="0.03" min="0.01" max="0.1" aria-label="Custom range">
+      </ion-range>
+      <ion-range id="epoch_no" labelPlacement="start" label="Epoch to train: " step="10" pin ticks snaps min="0" max="100" aria-label="Custom range">
+      </ion-range>
+      
     </>
   )
 }
+
+
 
 let addPage = (
   <>
