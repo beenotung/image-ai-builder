@@ -15,6 +15,7 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
+import { Script } from '../components/script.js'
 
 let pageTitle = <Locale en="Train AI" zh_hk="Train AI" zh_cn="Train AI" />
 let addPageTitle = (
@@ -32,6 +33,22 @@ ion-range::part(pin) { /*always show pin number*/
 }
 `)
 
+let script = Script(/* js */ `
+  //if no duplicate variable error, it should add 'let' before variable
+  learning_rate = document.querySelector('#learning_rate'); 
+
+  learning_rate.pinFormatter = (value) => {
+    // Format the value to 2 decimal places
+    return value.toFixed(2);
+  }
+
+  learning_rate.addEventListener('ionChange', ({ detail }) => {
+    // console.log('learning rate emitted value: ' + detail.value);
+  });
+
+
+`)
+
 let page = (
   <>
     {style}
@@ -47,6 +64,7 @@ let page = (
       Model Training Setting
       <Main />
     </ion-content>
+    {script}
   </>
 )
 
@@ -79,7 +97,7 @@ function Main(attrs: {}, context: Context) {
       )} */}
       <ion-range id="learning_rate" labelPlacement="start" label="Learning Rate: " step="0.01" pin ticks snaps value="0.03" min="0.01" max="0.1" aria-label="Custom range">
       </ion-range>
-      <ion-range id="epoch_no" labelPlacement="start" label="Epoch to train: " step="10" pin ticks snaps min="0" max="100" aria-label="Custom range">
+      <ion-range id="epoch_no" labelPlacement="start" label="Epoch to train: " step="10" pin ticks snaps value="20" min="0" max="100" aria-label="Custom range">
       </ion-range>
       
     </>
