@@ -146,8 +146,20 @@ user_id integer FK >0- user.id
 answer integer
 
 
+training_stats
+--------------
+id integer PK
+user_id integer FK >0- user.id
+epoch integer
+learning_rate real
+train_accuracy real
+train_loss real
+val_accuracy real
+val_loss real
+
+
 # zoom: 1.000
-# view: (253, 509)
+# view: (-151, 445)
 # text-bg: #6495ed
 # text-color: #000000
 # diagram-bg: #f5f5f5
@@ -169,3 +181,4 @@ answer integer
 # image (1251, 636)
 # label (1255, 869)
 # image_label (921, 771)
+# training_stats (64, 1057)

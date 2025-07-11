@@ -10,17 +10,23 @@ import {
 } from '../context.js'
 import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
-import { object, string } from 'cast.ts'
+import { float, int, object, string, values } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
-import { evalLocale, Locale } from '../components/locale.js'
+import { evalLocale, Locale, Title } from '../components/locale.js'
 import { Script } from '../components/script.js'
 import { Chart, ChartScript } from '../components/chart.js'
+import { toRouteUrl } from '../../url.js'
+import { EarlyTerminate } from '../../exception.js'
+import { sessions } from '../session.js'
+import { ServerMessage } from '../../../client/types.js'
+import { sleep } from '@beenotung/tslib/async/wait.js'
+import { del, notNull, pick } from 'better-sqlite3-proxy'
+import { proxy } from '../../../db/proxy.js'
 
-let pageTitle = <Locale en="Train AI" zh_hk="訓練 AI" zh_cn="训练 AI" />
-let addPageTitle = (
-  <Locale en="Add Train AI" zh_hk="添加Train AI" zh_cn="添加Train AI" />
+let pageTitle = (
+  <Locale en="Train AI Model" zh_hk="訓練 AI 模型" zh_cn="训练 AI 模型" />
 )
 
 let style = Style(/* css */ `
@@ -35,19 +41,48 @@ ion-range::part(pin) { /*always show pin number*/
 `)
 
 let script = Script(/* js */ `
-  //if no duplicate variable error, it should add 'let' before variable
-  learning_rate = document.querySelector('#learning_rate'); 
+// if no duplicate variable error, it should add 'let' before variable
+learning_rate = document.querySelector('#learning_rate'); 
+learning_rate_input = document.querySelector('#learning_rate_input');
 
+// Epoch Elements
+epoch_no = document.querySelector('#epoch_no');
+epoch_no_input = document.querySelector('#epoch_no_input');
+
+learning_rate.pinFormatter = (value) => {
+  // Format the value to 2 decimal places
+  return value.toFixed(2);
+}
+
+learning_rate.addEventListener('ionChange', ({ detail }) => {
+  learning_rate_input.value = detail.value
+});
+
+learning_rate_input.addEventListener('ionChange', ({ detail }) => {
   learning_rate.pinFormatter = (value) => {
-    // Format the value to 2 decimal places
-    return value.toFixed(2);
+    return detail.value;
   }
+  learning_rate.value = detail.value
+});
 
-  learning_rate.addEventListener('ionChange', ({ detail }) => {
-    // console.log('learning rate emitted value: ' + detail.value);
-  });
+epoch_no.addEventListener('ionChange', ({ detail }) => {
+  
+  epoch_no_input.value = detail.value
+  
+});
 
+epoch_no_input.addEventListener('ionChange', ({ detail }) => {
+  epoch_no.value = detail.value
+  epoch_no.pinFormatter = (value) => {
+    return detail.value;
+  }
+});
 
+function cancelEnterSubmit(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+  }
+}
 `)
 
 let page = (
@@ -76,18 +111,39 @@ let page = (
   </>
 )
 
-let items = [
-  { title: 'Android', slug: 'md' },
-  { title: 'iOS', slug: 'ios' },
-]
-
-let demo_chart_label: string[] = ['1', '2', '3', '4', '5']
-let demo_chart_data: number[] = [10, 15, 10, 11, 9]
-
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
+
+  let rows = pick(proxy.training_stats, [
+    'epoch',
+    'train_loss',
+    'val_loss',
+    'train_accuracy',
+    'val_accuracy',
+  ])
+
+  let chart_label = []
+
+  let loss_chart_train_data = []
+  let loss_chart_val_data = []
+
+  let accuracy_chart_train_data = []
+  let accuracy_chart_val_data = []
+
+  for (let row of rows) {
+    chart_label.push(row.epoch.toLocaleString())
+    loss_chart_train_data.push(row.train_loss)
+    loss_chart_val_data.push(row.val_loss)
+    accuracy_chart_train_data.push(row.train_accuracy)
+    accuracy_chart_val_data.push(row.val_accuracy)
+  }
+
   return (
-    <>
+    <form
+      method="POST"
+      action={toRouteUrl(routes, '/train-ai/train')}
+      onsubmit="emitForm(event)"
+    >
       {/* <ion-list>
         {mapArray(items, item => (
           <ion-item>
@@ -119,15 +175,28 @@ function Main(attrs: {}, context: Context) {
           max="0.1"
           aria-label="Custom range"
         ></ion-range>
+        <ion-input
+          id="learning_rate_input"
+          name="learning_rate"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]+.?[0-9]*"
+          maxlength="10"
+          min="0"
+          style="width: 25%; font-size: 16px;"
+          placeholder="Numbers only"
+          value="0.03"
+          step="0.01"
+          onkeypress="cancelEnterSubmit(event)"
+        ></ion-input>
       </ion-item>
       <ion-item>
         <ion-label>
           <Locale en="Epoch to train:" zh_hk="訓練輪數:" zh_cn="训练轮数:" />
         </ion-label>
-
         <ion-range
           id="epoch_no"
-          step="10"
+          step="5"
           pin
           ticks
           snaps
@@ -136,12 +205,42 @@ function Main(attrs: {}, context: Context) {
           max="100"
           aria-label="Custom range"
         ></ion-range>
+        <ion-input
+          name="epoch_no"
+          id="epoch_no_input"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]+"
+          maxlength="10"
+          min="0"
+          style="width: 25%; font-size: 16px;"
+          placeholder="Numbers only"
+          value="20"
+          onkeypress="cancelEnterSubmit(event)"
+        ></ion-input>
       </ion-item>
-
+      <ion-item>
+        <ion-label>
+          <Locale en="Training Mode:" zh_hk="訓練模式:" zh_cn="训练模式:" />
+        </ion-label>
+        <ion-select name="training_mode" value="continue">
+          <ion-select-option value="continue">
+            <Locale
+              en="Continue from previous training"
+              zh_hk="繼續上一次訓練"
+              zh_cn="继续上一次训练"
+            />
+          </ion-select-option>
+          <ion-select-option value="scratch">
+            <Locale en="Train from scratch" zh_hk="從頭訓練" zh_cn="从头训练" />
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
+      <br></br>
       {user ? (
-        <Link href="/train-ai/train" tagName="ion-button">
+        <ion-button type="submit">
           {<Locale en="Train AI" zh_hk="訓練 AI" zh_cn="训练 AI" />}
-        </Link>
+        </ion-button>
       ) : (
         <p>
           You can train ai after <Link href="/register">register</Link>.
@@ -149,184 +248,128 @@ function Main(attrs: {}, context: Context) {
       )}
       <h2>
         <Locale
-          en="Model Loss over Epoch"
-          zh_hk="模型損失隨訓練輪數變化"
-          zh_cn="模型损失随训练轮数变化"
+          en="Model Evaluation over Epoch"
+          zh_hk="模型評估隨訓練輪數變化"
+          zh_cn="模型评估随训练轮数变化"
         />
       </h2>
+      <div id="demoMessage"></div>
       {ChartScript}
-      <div style="width: 100%; height: 400px;">
+      <div style="width: 100%; max-height: 400px;">
         <Chart
-          canvas_id="Model Loss over Epoch"
-          data_labels={demo_chart_label}
-          datasets={[{ label: 'Loss', data: demo_chart_data }]}
+          canvas_id="loss_canvas"
+          data_labels={chart_label}
+          datasets={[
+            { label: 'Train Loss', data: loss_chart_train_data },
+            { label: 'Val Loss', data: loss_chart_val_data },
+          ]}
           borderWidth={1}
           min={0}
-          max={9}
         />
       </div>
-    </>
+      <div style="width: 100%; max-height: 400px;">
+        <Chart
+          canvas_id="accuracy_canvas"
+          data_labels={chart_label}
+          datasets={[
+            { label: 'Train Accuracy', data: accuracy_chart_train_data },
+            { label: 'Val Accuracy', data: accuracy_chart_val_data },
+          ]}
+          borderWidth={1}
+          min={0}
+          max={1}
+        />
+      </div>
+    </form>
   )
 }
 
-let addPage = (
-  <>
-    {Style(/* css */ `
-#AddTrainAI .hint {
-  margin-inline-start: 1rem;
-  margin-block: 0.25rem;
-}
-`)}
-    <ion-header>
-      <ion-toolbar>
-        <IonBackButton href="/train-ai" backText={pageTitle} />
-        <ion-title role="heading" aria-level="1">
-          {addPageTitle}
-        </ion-title>
-      </ion-toolbar>
-    </ion-header>
-    <ion-content id="AddTrainAI" class="ion-padding">
-      <form
-        method="POST"
-        action="/train-ai/add/submit"
-        onsubmit="emitForm(event)"
-      >
-        <ion-list>
-          <ion-item>
-            <ion-input
-              name="title"
-              label="Title*:"
-              label-placement="floating"
-              required
-              minlength="3"
-              maxlength="50"
-            />
-          </ion-item>
-          <p class="hint">(3-50 characters)</p>
-          <ion-item>
-            <ion-input
-              name="slug"
-              label="Slug*: (unique url)"
-              label-placement="floating"
-              required
-              pattern="(\w|-|\.){1,32}"
-            />
-          </ion-item>
-          <p class="hint">
-            (1-32 characters of: <code>a-z A-Z 0-9 - _ .</code>)
-          </p>
-        </ion-list>
-        <div style="margin-inline-start: 1rem">
-          <ion-button type="submit">Submit</ion-button>
-        </div>
-        <p>
-          Remark:
-          <br />
-          *: mandatory fields
-        </p>
-        <p id="add-message"></p>
-      </form>
-    </ion-content>
-  </>
-)
-
-function AddPage(attrs: {}, context: DynamicContext) {
-  let user = getAuthUser(context)
-  if (!user) return <Redirect href="/login" />
-  return addPage
-}
-
-let submitParser = object({
-  title: string({ minLength: 3, maxLength: 50 }),
-  slug: string({ match: /^[\w-]{1,32}$/ }),
+let submitTrainParser = object({
+  learning_rate: float(),
+  epoch_no: int(),
+  training_mode: values(['continue' as const, 'scratch' as const]),
 })
 
-function Submit(attrs: {}, context: DynamicContext) {
-  try {
-    let user = getAuthUser(context)
-    if (!user) throw 'You must be logged in to submit ' + pageTitle
-    let body = getContextFormBody(context)
-    let input = submitParser.parse(body)
-    let id = items.push({
-      title: input.title,
-      slug: input.slug,
-    })
-    return <Redirect href={`/train-ai/result?id=${id}`} />
-  } catch (error) {
-    throwIfInAPI(error, '#add-message', context)
-    return (
-      <Redirect
-        href={
-          '/train-ai/result?' + new URLSearchParams({ error: String(error) })
-        }
-      />
-    )
+function SubmitTrain(attrs: {}, context: DynamicContext) {
+  let user = getAuthUser(context)
+  if (!user) throw 'You must be logged in to train AI'
+  let body = getContextFormBody(context)
+  let input = submitTrainParser.parse(body)
+  if (input.training_mode === 'scratch') {
+    del(proxy.training_stats, { id: notNull })
+    let code = /* javascript */ `
+loss_canvas.chart.data.labels = []
+loss_canvas.chart.data.datasets[0].data = []
+loss_canvas.chart.data.datasets[1].data = []
+loss_canvas.chart.update();
+
+accuracy_canvas.chart.data.labels = []
+accuracy_canvas.chart.data.datasets[0].data = []
+accuracy_canvas.chart.data.datasets[1].data = []
+accuracy_canvas.chart.update();
+    `
+    broadcast(['eval', code])
   }
+  async function train() {
+    for (let i = 0; i < input.epoch_no; i++) {
+      await sleep(50)
+      let epoch = proxy.training_stats.length + 1
+      let train_loss = Math.random() * 10
+      let val_loss = Math.random() * 10
+      let train_accuracy = Math.random()
+      let val_accuracy = Math.random()
+      proxy.training_stats.push({
+        user_id: user!.id!,
+        learning_rate: input.learning_rate,
+        epoch,
+        train_loss,
+        train_accuracy,
+        val_loss,
+        val_accuracy,
+      })
+      let code = /* javascript */ `
+loss_canvas.chart.data.labels.push('${epoch}');
+loss_canvas.chart.data.datasets[0].data.push(${train_loss});
+loss_canvas.chart.data.datasets[1].data.push(${val_loss});
+loss_canvas.chart.update();
+
+accuracy_canvas.chart.data.labels.push('${epoch}');
+accuracy_canvas.chart.data.datasets[0].data.push(${train_accuracy});
+accuracy_canvas.chart.data.datasets[1].data.push(${val_accuracy});
+accuracy_canvas.chart.update();
+  `
+      broadcast(['eval', code])
+    }
+  }
+  train()
+  throw EarlyTerminate
 }
 
-function SubmitResult(attrs: {}, context: DynamicContext) {
-  let params = new URLSearchParams(context.routerMatch?.search)
-  let error = params.get('error')
-  let id = params.get('id')
-  return (
-    <>
-      <ion-header>
-        <ion-toolbar>
-          <IonBackButton href="/train-ai/add" backText="Form" />
-          <ion-title role="heading" aria-level="1">
-            Submitted {pageTitle}
-          </ion-title>
-        </ion-toolbar>
-      </ion-header>
-      <ion-content id="AddTrainAI" class="ion-padding">
-        {error ? (
-          renderError(error, context)
-        ) : (
-          <>
-            <p>Your submission is received (#{id}).</p>
-            <Link href="/train-ai" tagName="ion-button">
-              Back to {pageTitle}
-            </Link>
-          </>
-        )}
-      </ion-content>
-    </>
-  )
+function broadcast(message: ServerMessage) {
+  sessions.forEach(session => {
+    if (session.url?.startsWith('/train-ai')) {
+      session.ws.send(message)
+    }
+  })
 }
 
 let routes = {
   '/train-ai': {
-    resolve(context) {
-      let t = evalLocale(pageTitle, context)
-      return {
-        title: title(t),
-        description: 'TODO',
-        node: page,
-      }
-    },
-  },
-  '/train-ai/add': {
-    title: title(addPageTitle),
-    description: 'TODO',
-    node: <AddPage />,
-    streaming: false,
-  },
-  '/train-ai/add/submit': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <Submit />,
-    streaming: false,
-  },
-  '/train-ai/result': {
-    title: apiEndpointTitle,
-    description: 'TODO',
-    node: <SubmitResult />,
-    streaming: false,
+    title: <Title t={pageTitle} />,
+    description: (
+      <Locale
+        en="View model training progress and submit training request"
+        zh_hk="查看模型訓練進度及提交訓練請求"
+        zh_cn="查看模型训练进度及提交训练请求"
+      />
+    ),
+    node: page,
   },
   '/train-ai/train': {
-    title: title(addPageTitle),
-    description: 'TODO',
-    node: <AddPage />,
+    title: apiEndpointTitle,
+    description:
+      'Train the model with the given learning rate and epoch number',
+    node: <SubmitTrain />,
     streaming: false,
   },
 } satisfies Routes

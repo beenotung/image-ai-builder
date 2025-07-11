@@ -133,6 +133,18 @@ export type ImageLabel = {
   answer: number
 }
 
+export type TrainingStats = {
+  id?: null | number
+  user_id: number
+  user?: User
+  epoch: number
+  learning_rate: number
+  train_accuracy: number
+  train_loss: number
+  val_accuracy: number
+  val_loss: number
+}
+
 export type DBProxy = {
   method: Method[]
   url: Url[]
@@ -149,6 +161,7 @@ export type DBProxy = {
   image: Image[]
   label: Label[]
   image_label: ImageLabel[]
+  training_stats: TrainingStats[]
 }
 
 export let proxy = proxySchema<DBProxy>({
@@ -197,6 +210,10 @@ export let proxy = proxySchema<DBProxy>({
       /* foreign references */
       ['image', { field: 'image_id', table: 'image' }],
       ['label', { field: 'label_id', table: 'label' }],
+      ['user', { field: 'user_id', table: 'user' }],
+    ],
+    training_stats: [
+      /* foreign references */
       ['user', { field: 'user_id', table: 'user' }],
     ],
   },
