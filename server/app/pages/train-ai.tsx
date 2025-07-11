@@ -16,8 +16,9 @@ import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
 import { Script } from '../components/script.js'
+import { Chart, ChartScript } from '../components/chart.js'
 
-let pageTitle = <Locale en="Train AI" zh_hk="Train AI" zh_cn="Train AI" />
+let pageTitle = <Locale en="Train AI" zh_hk="訓練 AI" zh_cn="训练 AI" />
 let addPageTitle = (
   <Locale en="Add Train AI" zh_hk="添加Train AI" zh_cn="添加Train AI" />
 )
@@ -61,7 +62,14 @@ let page = (
       </ion-toolbar>
     </ion-header>
     <ion-content id="TrainAI" class="ion-padding">
-      Model Training Setting
+      <h2>
+        <Locale
+          en="Model Training Setting"
+          zh_hk="模型訓練設定"
+          zh_cn="模型训练设置"
+        ></Locale>
+      </h2>
+
       <Main />
     </ion-content>
     {script}
@@ -73,9 +81,10 @@ let items = [
   { title: 'iOS', slug: 'ios' },
 ]
 
+let demo_chart_label: string[] = ['1', '2', '3', '4', '5']
+let demo_chart_data: number[] = [10, 15, 10, 11, 9]
 
 function Main(attrs: {}, context: Context) {
-
   let user = getAuthUser(context)
   return (
     <>
@@ -95,16 +104,70 @@ function Main(attrs: {}, context: Context) {
           You can add train ai after <Link href="/register">register</Link>.
         </p>
       )} */}
-      <ion-range id="learning_rate" labelPlacement="start" label="Learning Rate: " step="0.01" pin ticks snaps value="0.03" min="0.01" max="0.1" aria-label="Custom range">
-      </ion-range>
-      <ion-range id="epoch_no" labelPlacement="start" label="Epoch to train: " step="10" pin ticks snaps value="20" min="0" max="100" aria-label="Custom range">
-      </ion-range>
-      
+      <ion-item>
+        <ion-label>
+          <Locale en="Learning Rate:" zh_hk="學習率:" zh_cn="学习率:" />
+        </ion-label>
+        <ion-range
+          id="learning_rate"
+          step="0.01"
+          pin
+          ticks
+          snaps
+          value="0.03"
+          min="0.01"
+          max="0.1"
+          aria-label="Custom range"
+        ></ion-range>
+      </ion-item>
+      <ion-item>
+        <ion-label>
+          <Locale en="Epoch to train:" zh_hk="訓練輪數:" zh_cn="训练轮数:" />
+        </ion-label>
+
+        <ion-range
+          id="epoch_no"
+          step="10"
+          pin
+          ticks
+          snaps
+          value="20"
+          min="0"
+          max="100"
+          aria-label="Custom range"
+        ></ion-range>
+      </ion-item>
+
+      {user ? (
+        <Link href="/train-ai/train" tagName="ion-button">
+          {<Locale en="Train AI" zh_hk="訓練 AI" zh_cn="训练 AI" />}
+        </Link>
+      ) : (
+        <p>
+          You can train ai after <Link href="/register">register</Link>.
+        </p>
+      )}
+      <h2>
+        <Locale
+          en="Model Loss over Epoch"
+          zh_hk="模型損失隨訓練輪數變化"
+          zh_cn="模型损失随训练轮数变化"
+        />
+      </h2>
+      {ChartScript}
+      <div style="width: 100%; height: 400px;">
+        <Chart
+          canvas_id="Model Loss over Epoch"
+          data_labels={demo_chart_label}
+          datasets={[{ label: 'Loss', data: demo_chart_data }]}
+          borderWidth={1}
+          min={0}
+          max={9}
+        />
+      </div>
     </>
   )
 }
-
-
 
 let addPage = (
   <>
@@ -258,6 +321,12 @@ let routes = {
     title: apiEndpointTitle,
     description: 'TODO',
     node: <SubmitResult />,
+    streaming: false,
+  },
+  '/train-ai/train': {
+    title: title(addPageTitle),
+    description: 'TODO',
+    node: <AddPage />,
     streaming: false,
   },
 } satisfies Routes
