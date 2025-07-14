@@ -116,30 +116,71 @@ let page = (
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
 
-  //get data from training_stats table on database
-  let rows = pick(proxy.training_stats, [
-    'epoch',
-    'train_loss',
-    'val_loss',
-    'train_accuracy',
-    'val_accuracy',
-  ])
-
-  let chart_label = []
-
-  let loss_chart_train_data = []
-  let loss_chart_val_data = []
-
-  let accuracy_chart_train_data = []
-  let accuracy_chart_val_data = []
-
-  for (let row of rows) {
-    chart_label.push(row.epoch.toLocaleString())
-    loss_chart_train_data.push(row.train_loss)
-    loss_chart_val_data.push(row.val_loss)
-    accuracy_chart_train_data.push(row.train_accuracy)
-    accuracy_chart_val_data.push(row.val_accuracy)
+  let statsByModel: Record<
+    number,
+    {
+      label_id: number
+      epochs: number[]
+      train_loss: number[]
+      val_loss: number[]
+      train_accuracy: number[]
+      val_accuracy: number[]
+    }
+  > = {}
+  for (let row of proxy.training_stats) {
+    if (!statsByModel[row.label_id]) {
+      statsByModel[row.label_id] = {
+        label_id: row.label_id,
+        epochs: [],
+        train_loss: [],
+        val_loss: [],
+        train_accuracy: [],
+        val_accuracy: [],
+      }
+    }
+    statsByModel[row.label_id].epochs.push(row.epoch)
+    statsByModel[row.label_id].train_loss.push(row.train_loss)
+    statsByModel[row.label_id].val_loss.push(row.val_loss)
+    statsByModel[row.label_id].train_accuracy.push(row.train_accuracy)
+    statsByModel[row.label_id].val_accuracy.push(row.val_accuracy)
   }
+
+  function getDatasets(key: string) {
+    return Object.values(statsByModel).map(model => ({
+      label: `Model ${model.label_id} ${key}`,
+      data: model[key as keyof typeof model] as number[],
+    }))
+  }
+
+  let chart_label = Object.values(statsByModel)[0].epochs.map(epoch =>
+    epoch.toString(),
+  )
+
+  // //get data from training_stats table on database
+  // let rows = pick(proxy.training_stats, [
+  //   'epoch',
+  //   'label_id',
+  //   'train_loss',
+  //   'val_loss',
+  //   'train_accuracy',
+  //   'val_accuracy',
+  // ])
+
+  // let chart_label = []
+
+  // let train_loss_dataset = []
+  // let val_loss_dataset = []
+
+  // let train_accuracy_dataset = []
+  // let val_accuracy_dataset = []
+
+  // for (let row of rows) {
+  //   chart_label.push(row.epoch.toLocaleString())
+  //   train_loss_dataset.push(row.train_loss)
+  //   val_loss_dataset.push(row.val_loss)
+  //   train_accuracy_dataset.push(row.train_accuracy)
+  //   val_accuracy_dataset.push(row.val_accuracy)
+  // }
 
   return (
     <form
@@ -246,24 +287,37 @@ function Main(attrs: {}, context: Context) {
       {ChartScript}
       <div style="width: 100%; max-height: 400px;">
         <Chart
-          canvas_id="loss_canvas"
+          canvas_id="train_loss_canvas"
           data_labels={chart_label}
-          datasets={[
-            { label: 'Train Loss', data: loss_chart_train_data },
-            { label: 'Val Loss', data: loss_chart_val_data },
-          ]}
+          datasets={getDatasets('train_loss')}
           borderWidth={1}
           min={0}
         />
       </div>
       <div style="width: 100%; max-height: 400px;">
         <Chart
-          canvas_id="accuracy_canvas"
+          canvas_id="val_loss_canvas"
           data_labels={chart_label}
-          datasets={[
-            { label: 'Train Accuracy', data: accuracy_chart_train_data },
-            { label: 'Val Accuracy', data: accuracy_chart_val_data },
-          ]}
+          datasets={getDatasets('val_loss')}
+          borderWidth={1}
+          min={0}
+        />
+      </div>
+      <div style="width: 100%; max-height: 400px;">
+        <Chart
+          canvas_id="train_accuracy_canvas"
+          data_labels={chart_label}
+          datasets={getDatasets('train_accuracy')}
+          borderWidth={1}
+          min={0}
+          max={1}
+        />
+      </div>
+      <div style="width: 100%; max-height: 400px;">
+        <Chart
+          canvas_id="val_accuracy_canvas"
+          data_labels={chart_label}
+          datasets={getDatasets('val_accuracy')}
           borderWidth={1}
           min={0}
           max={1}
@@ -299,37 +353,43 @@ accuracy_canvas.chart.update();
     `
     broadcast(['eval', code])
   }
+  let epoch = proxy.training_stats.length + 1
   async function train() {
     for (let i = 0; i < input.epoch_no; i++) {
-      await sleep(50)
-      let epoch = proxy.training_stats.length + 1
-      let train_loss = Math.random() * 10
-      let val_loss = Math.random() * 10
-      let train_accuracy = Math.random()
-      let val_accuracy = Math.random()
-      proxy.training_stats.push({
-        user_id: user!.id!,
-        learning_rate: input.learning_rate,
-        epoch,
-        train_loss,
-        train_accuracy,
-        val_loss,
-        val_accuracy,
-      })
-      let code = /* javascript for update chart */ `
-loss_canvas.chart.data.labels.push('${epoch}');
-loss_canvas.chart.data.datasets[0].data.push(${train_loss});
-loss_canvas.chart.data.datasets[1].data.push(${val_loss});
-loss_canvas.chart.update();
+      for (let label_id = 1; label_id <= 5; label_id++) {
+        await sleep(50)
+        let train_loss = Math.random() * 10
+        let val_loss = Math.random() * 10
+        let train_accuracy = Math.random()
+        let val_accuracy = Math.random()
+        proxy.training_stats.push({
+          user_id: user!.id!,
+          learning_rate: input.learning_rate,
+          epoch,
+          train_loss,
+          train_accuracy,
+          val_loss,
+          val_accuracy,
+          label_id,
+        })
 
-accuracy_canvas.chart.data.labels.push('${epoch}');
-accuracy_canvas.chart.data.datasets[0].data.push(${train_accuracy});
-accuracy_canvas.chart.data.datasets[1].data.push(${val_accuracy});
-accuracy_canvas.chart.update();
-  `
-      broadcast(['eval', code])
+        // let code = /* javascript for update chart */ `
+        // loss_canvas.chart.data.labels.push('${epoch}');
+        // loss_canvas.chart.data.datasets[0].data.push(${train_loss});
+        // loss_canvas.chart.data.datasets[1].data.push(${val_loss});
+        // loss_canvas.chart.update();
+
+        // accuracy_canvas.chart.data.labels.push('${epoch}');
+        // accuracy_canvas.chart.data.datasets[0].data.push(${train_accuracy});
+        // accuracy_canvas.chart.data.datasets[1].data.push(${val_accuracy});
+        // accuracy_canvas.chart.update();
+        //   `
+        // broadcast(['eval', code])
+      }
+      epoch++
     }
   }
+
   train()
   throw EarlyTerminate
 }
