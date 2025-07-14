@@ -41,7 +41,7 @@ ion-range::part(pin) { /*always show pin number*/
 `)
 
 let script = Script(/* js */ `
-// if no duplicate variable error, it should add 'let' before variable
+// Learning Rate Elements
 learning_rate = document.querySelector('#learning_rate'); 
 learning_rate_input = document.querySelector('#learning_rate_input');
 
@@ -49,6 +49,7 @@ learning_rate_input = document.querySelector('#learning_rate_input');
 epoch_no = document.querySelector('#epoch_no');
 epoch_no_input = document.querySelector('#epoch_no_input');
 
+//change default pin formatter from integer to float
 learning_rate.pinFormatter = (value) => {
   // Format the value to 2 decimal places
   return value.toFixed(2);
@@ -58,6 +59,7 @@ learning_rate.addEventListener('ionChange', ({ detail }) => {
   learning_rate_input.value = detail.value
 });
 
+//sync data of slider and input
 learning_rate_input.addEventListener('ionChange', ({ detail }) => {
   learning_rate.pinFormatter = (value) => {
     return detail.value;
@@ -78,6 +80,7 @@ epoch_no_input.addEventListener('ionChange', ({ detail }) => {
   }
 });
 
+//ignore enter key to submit form
 function cancelEnterSubmit(event) {
   if (event.key === 'Enter') {
     event.preventDefault()
@@ -104,7 +107,6 @@ let page = (
           zh_cn="模型训练设置"
         ></Locale>
       </h2>
-
       <Main />
     </ion-content>
     {script}
@@ -114,6 +116,7 @@ let page = (
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
 
+  //get data from training_stats table on database
   let rows = pick(proxy.training_stats, [
     'epoch',
     'train_loss',
@@ -144,26 +147,11 @@ function Main(attrs: {}, context: Context) {
       action={toRouteUrl(routes, '/train-ai/train')}
       onsubmit="emitForm(event)"
     >
-      {/* <ion-list>
-        {mapArray(items, item => (
-          <ion-item>
-            {item.title} ({item.slug})
-          </ion-item>
-        ))}
-      </ion-list>
-      {user ? (
-        <Link href="/train-ai/add" tagName="ion-button">
-          {addPageTitle}
-        </Link>
-      ) : (
-        <p>
-          You can add train ai after <Link href="/register">register</Link>.
-        </p>
-      )} */}
       <ion-item>
         <ion-label>
           <Locale en="Learning Rate:" zh_hk="學習率:" zh_cn="学习率:" />
         </ion-label>
+        {/* Learning Rate Slider */}
         <ion-range
           id="learning_rate"
           step="0.01"
@@ -194,6 +182,7 @@ function Main(attrs: {}, context: Context) {
         <ion-label>
           <Locale en="Epoch to train:" zh_hk="訓練輪數:" zh_cn="训练轮数:" />
         </ion-label>
+        {/* Epoch Slider */}
         <ion-range
           id="epoch_no"
           step="5"
@@ -297,7 +286,7 @@ function SubmitTrain(attrs: {}, context: DynamicContext) {
   let input = submitTrainParser.parse(body)
   if (input.training_mode === 'scratch') {
     del(proxy.training_stats, { id: notNull })
-    let code = /* javascript */ `
+    let code = /* javascript for reset chart */ `
 loss_canvas.chart.data.labels = []
 loss_canvas.chart.data.datasets[0].data = []
 loss_canvas.chart.data.datasets[1].data = []
@@ -327,7 +316,7 @@ accuracy_canvas.chart.update();
         val_loss,
         val_accuracy,
       })
-      let code = /* javascript */ `
+      let code = /* javascript for update chart */ `
 loss_canvas.chart.data.labels.push('${epoch}');
 loss_canvas.chart.data.datasets[0].data.push(${train_loss});
 loss_canvas.chart.data.datasets[1].data.push(${val_loss});
