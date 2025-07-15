@@ -88,6 +88,20 @@ function rotateAnnotationImage(image) {
   rotateImageInline(image)
 }
 
+function initAnnotationImage(image) {
+  let degree = image.dataset.rotation || 0
+  function check() {
+    if (!degree) {
+      image.onload = null
+      return
+    }
+    degree -= 90
+    rotateImageInline(image)
+    image.onload = check
+  }
+  check()
+}
+
 function updateSelectOptionText(selector, text) {
   let option = document.querySelector(selector)
   if (option) {
@@ -245,7 +259,7 @@ function Main(attrs: {}, context: DynamicContext) {
             }
             style="height: 100%; object-fit: contain"
             onclick="rotateAnnotationImage(this)"
-            onload="rotateImageInline(this); this.onload = null"
+            onload="initAnnotationImage(this)"
             hidden={!image}
           />
           <div
@@ -588,7 +602,7 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
     // Set up client-side image rotation on load
     context.ws.send([
       'eval',
-      `label_image.onload = () => { rotateImageInline(label_image); label_image.onload = null }`,
+      `label_image.onload = () => initAnnotationImage(label_image)`,
     ])
 
     // Terminate execution to prevent further processing
@@ -718,7 +732,7 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     if (next_image) {
       context.ws.send([
         'eval',
-        `label_image.onload = () => { rotateImageInline(label_image); label_image.onload = null }`,
+        `label_image.onload = () => initAnnotationImage(label_image)`,
       ])
     }
 
