@@ -140,6 +140,10 @@ function Main(attrs: {}, context: DynamicContext) {
   let label_id = +params.get('label')! || 1
   let image = select_next_image.get({ label_id })
   let total_images = proxy.image.length
+  let last_annotation = select_previous_image_label.get({
+    user_id: user.id!,
+    label_id,
+  })
   return (
     <>
       <div style="height: 100%; display: flex; flex-direction: column; text-align: center">
@@ -222,7 +226,7 @@ function Main(attrs: {}, context: DynamicContext) {
             color="danger"
             onclick="submitAnnotation(0)"
             id="btn_submit_reject"
-            disable="true"
+            disabled={!image}
             title={
               <Locale
                 en="Annotate as not having the label"
@@ -238,7 +242,7 @@ function Main(attrs: {}, context: DynamicContext) {
             color="dark"
             onclick="undoAnnotation()"
             id="btn_undo"
-            disabled="true"
+            disabled={!last_annotation}
             title={<Locale en="Undo" zh_hk="還原" zh_cn="还原" />}
           >
             <ion-icon name="arrow-undo" slot="icon-only"></ion-icon>
@@ -248,7 +252,7 @@ function Main(attrs: {}, context: DynamicContext) {
             color="success"
             onclick="submitAnnotation(1)"
             id="btn_submit_agree"
-            disable="true"
+            disabled={!image}
             title={
               <Locale
                 en="Annotate as having the label"
