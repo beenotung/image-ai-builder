@@ -173,19 +173,19 @@ let page = (
 )
 
 let count_annotated_images = db
-  .prepare<{ label_id: number; user_id: number }, number>(
+  .prepare<{ label_id: number }, number>(
     /* sql */ `
 select count(distinct image_id)
 from image_label
-where label_id = :label_id and user_id = :user_id
+where label_id = :label_id
 `,
   )
   .pluck()
 
 let has_previous_annotation = db
-  .prepare<{ user_id: number; label_id: number }, number>(
+  .prepare<{ label_id: number }, number>(
     /* sql */ `
-select count(*) from image_label where user_id = :user_id and label_id = :label_id
+select count(*) from image_label where label_id = :label_id
 `,
   )
   .pluck()
@@ -211,12 +211,11 @@ function Main(attrs: {}, context: DynamicContext) {
       </>
     )
   }
-  let user_id = user.id!
   let params = new URLSearchParams(context.routerMatch?.search)
   let label_id = +params.get('label')! || 1
-  let image = select_next_image.get({ label_id, user_id })
+  let image = select_next_image.get({ label_id })
   let total_images = proxy.image.length
-  let count = has_previous_annotation.get({ user_id, label_id }) as number
+  let count = has_previous_annotation.get({ label_id }) as number
   let has_undo = count > 0
 
   return (
@@ -234,7 +233,6 @@ function Main(attrs: {}, context: DynamicContext) {
             {mapArray(proxy.label, label => {
               let annotated_images = count_annotated_images.get({
                 label_id: label.id!,
-                user_id,
               })
               return (
                 <ion-select-option value={label.id}>
@@ -346,14 +344,14 @@ function Main(attrs: {}, context: DynamicContext) {
 }
 
 let select_next_image = db.prepare<
-  { label_id: number; user_id: number },
+  { label_id: number },
   { id: number; filename: string; rotation: number | null }
 >(/* sql */ `
 select image.id, image.filename, image.rotation
 from image
 where id not in (
   select image_id from image_label
-  where label_id = :label_id and user_id = :user_id
+  where label_id = :label_id
 )
 `)
 
@@ -363,10 +361,9 @@ async function getNextImage(context: ExpressContext) {
   try {
     let user = getAuthUser(context)
     if (!user) throw 'You must be logged in to annotate image'
-    let user_id = user.id!
     let label_id = +req.query.label!
     if (!label_id) throw 'missing label'
-    let image = select_next_image.get({ label_id, user_id })
+    let image = select_next_image.get({ label_id })
     return { image }
   } catch (error) {
     return { error: String(error) }
@@ -421,7 +418,7 @@ function ShowImage(attrs: {}, context: WsContext) {
     ])
 
     // check if label exists
-    let next_image = select_next_image.get({ label_id, user_id })
+    let next_image = select_next_image.get({ label_id })
     console.log(`ShowImage: next_image for label_id=${label_id}:`, next_image)
 
     // if no image found, return error
@@ -535,11 +532,9 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
     console.log(`UndoAnnotation: Deleted image_label id=${last_annotation!.id}`)
 
     // Calculate the updated count of annotated images
-    let new_count = count_annotated_images.get({ label_id, user_id })
+    let new_count = count_annotated_images.get({ label_id })
     // Log the new annotation count for debugging
-    console.log(
-      `UndoAnnotation: new_count=${new_count}, label_id=${label_id}, user_id=${user_id}`,
-    )
+    console.log(`UndoAnnotation: new_count=${new_count}, label_id=${label_id}`)
     // Get total number of images
     let total_images = proxy.image.length
     // Retrieve label details
@@ -636,7 +631,6 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     let user = getAuthUser(context)
     // Throw error if user is not logged in
     if (!user) throw 'You must be logged in to annotate image'
-    let user_id = user.id!
 
     // Parse and validate input to extract annotation details
     let {
@@ -671,11 +665,10 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     // Calculate the updated count of annotated images
     let new_count = count_annotated_images.get({
       label_id: input.label,
-      user_id,
     })
     // Log the new annotation count for debugging
     console.log(
-      `SubmitAnnotation: new_count=${new_count}, label_id=${input.label}, user_id=${user_id}`,
+      `SubmitAnnotation: new_count=${new_count}, label_id=${input.label}`,
     )
     // Get total number of images
     let total_images = proxy.image.length
@@ -700,7 +693,6 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     // Query the database for the next unannotated image
     let next_image = select_next_image.get({
       label_id: input.label,
-      user_id: user.id!,
     })
     // Send batch WebSocket messages to update UI elements
     context.ws.send([
