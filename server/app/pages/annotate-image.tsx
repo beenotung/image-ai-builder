@@ -40,8 +40,6 @@ let style = Style(/* css */ `
 `)
 
 let script = Script(/* js */ `
-showImage()
-
 // Displays the next image for annotation based on selected label
 function showImage(){
   const labelId = label_select.value;
@@ -89,7 +87,7 @@ function rotateAnnotationImage(image) {
 }
 
 function initAnnotationImage(image) {
-  let degree = image.dataset.rotation || 0
+  let degree = +image.dataset.rotation || 0
   function check() {
     if (!degree) {
       image.onload = null
@@ -472,7 +470,7 @@ function ShowImage(attrs: {}, context: WsContext) {
     if (next_image) {
       context.ws.send([
         'eval',
-        `label_image.onload = () => { rotateImageInline(label_image); label_image.onload = null }`,
+        `label_image.onload = () => initAnnotationImage(label_image)`,
       ])
     }
 
