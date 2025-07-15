@@ -49,7 +49,7 @@ let script = Script(/* js */ `
 showImage();
 
 // show image request
-function showImage(){
+function showImage() {
   emit('/annotate-image/showImage', {
     label_id: label_select.value,
   })
@@ -106,6 +106,7 @@ let page = (
   </>
 )
 
+// Count annotated images for each label
 let count_annotated_images = db
   .prepare<{ label_id: number }, number>(
     /* sql */ `
