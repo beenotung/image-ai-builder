@@ -116,6 +116,7 @@ let page = (
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
 
+  //get data from training_stats table on database and group by label_id
   let statsByModel: Record<
     number,
     {
@@ -127,6 +128,7 @@ function Main(attrs: {}, context: Context) {
       val_accuracy: number[]
     }
   > = {}
+
   for (let row of proxy.training_stats) {
     if (!statsByModel[row.label_id]) {
       statsByModel[row.label_id] = {
@@ -152,9 +154,12 @@ function Main(attrs: {}, context: Context) {
     }))
   }
 
-  let chart_label = Object.values(statsByModel)[0].epochs.map(epoch =>
-    epoch.toString(),
-  )
+  let chart_label: string[] = []
+
+  const statsValues = Object.values(statsByModel)
+  if (statsValues.length > 0) {
+    chart_label = statsValues[0].epochs.map(epoch => epoch.toString())
+  }
 
   // //get data from training_stats table on database
   // let rows = pick(proxy.training_stats, [
@@ -353,7 +358,8 @@ accuracy_canvas.chart.update();
     `
     broadcast(['eval', code])
   }
-  let epoch = proxy.training_stats.length + 1
+
+  let epoch = proxy.training_stats.length / 5 + 1
   async function train() {
     for (let i = 0; i < input.epoch_no; i++) {
       for (let label_id = 1; label_id <= 5; label_id++) {
