@@ -24,6 +24,7 @@ import { ServerMessage } from '../../../client/types.js'
 import { sleep } from '@beenotung/tslib/async/wait.js'
 import { del, notNull, pick } from 'better-sqlite3-proxy'
 import { proxy } from '../../../db/proxy.js'
+import { db } from '../../../db/db.js'
 
 let pageTitle = (
   <Locale en="Train AI Model" zh_hk="訓練 AI 模型" zh_cn="训练 AI 模型" />
@@ -55,28 +56,34 @@ learning_rate.pinFormatter = (value) => {
   return value.toFixed(2);
 }
 
+//sync data of slider and input
 learning_rate.addEventListener('ionChange', ({ detail }) => {
   learning_rate_input.value = detail.value
+  learning_rate.pinFormatter = (value) => {
+  // Format the value to 2 decimal places
+  value = learning_rate.value
+  return value.toFixed(2);
+}
 });
 
-//sync data of slider and input
 learning_rate_input.addEventListener('ionChange', ({ detail }) => {
-  learning_rate.pinFormatter = (value) => {
-    return detail.value;
-  }
   learning_rate.value = detail.value
+  learning_rate.pinFormatter = (value) => {
+    return learning_rate.value;
+  }
 });
 
 epoch_no.addEventListener('ionChange', ({ detail }) => {
-  
   epoch_no_input.value = detail.value
-  
+  epoch_no.pinFormatter = (value) => {
+    return epoch_no.value;
+  }
 });
 
 epoch_no_input.addEventListener('ionChange', ({ detail }) => {
   epoch_no.value = detail.value
   epoch_no.pinFormatter = (value) => {
-    return detail.value;
+    return epoch_no.value;
   }
 });
 
@@ -113,10 +120,43 @@ let page = (
   </>
 )
 
+//get label title from label_id
+const get_label_title = db
+  .prepare<{ label_id: number }, { title: string }>(
+    /* sql */ `
+  select label.title
+  from label
+  where id = :label_id
+  limit 1
+`,
+  )
+  .pluck()
+
+const model_labels = () => {
+  let model_labels = []
+  for (let row of proxy.label) {
+    model_labels.push(row.title)
+  }
+  return model_labels
+}
+
+//check how many models are there
+const count_model = () => {
+  let model_no = 0
+  for (let row of proxy.label) {
+    if (row.id && row.id > model_no) {
+      model_no = row.id
+    }
+  }
+  return model_no
+}
+
+const MODEL_NO = count_model()
+
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
 
-  //get data from training_stats table on database and group by label_id
+  //get data from training_stats table on database and group by label_id (support multiple models)
   let statsByModel: Record<
     number,
     {
@@ -147,45 +187,23 @@ function Main(attrs: {}, context: Context) {
     statsByModel[row.label_id].val_accuracy.push(row.val_accuracy)
   }
 
+  //get datasets for chart drawing
+  /* example
+  data: [{label: 'Model (label.title) train_loss', data: [1, 2, 3]}, {label: 'Model (label.title) val_loss', data: [4, 5, 6]}]
+  */
   function getDatasets(key: string) {
     return Object.values(statsByModel).map(model => ({
-      label: `Model ${model.label_id} ${key}`,
+      label: `Model ${get_label_title.get({ label_id: model.label_id })} ${key}`,
       data: model[key as keyof typeof model] as number[],
     }))
   }
 
+  //get epochs for chart drawing
   let chart_label: string[] = []
-
   const statsValues = Object.values(statsByModel)
   if (statsValues.length > 0) {
     chart_label = statsValues[0].epochs.map(epoch => epoch.toString())
   }
-
-  // //get data from training_stats table on database
-  // let rows = pick(proxy.training_stats, [
-  //   'epoch',
-  //   'label_id',
-  //   'train_loss',
-  //   'val_loss',
-  //   'train_accuracy',
-  //   'val_accuracy',
-  // ])
-
-  // let chart_label = []
-
-  // let train_loss_dataset = []
-  // let val_loss_dataset = []
-
-  // let train_accuracy_dataset = []
-  // let val_accuracy_dataset = []
-
-  // for (let row of rows) {
-  //   chart_label.push(row.epoch.toLocaleString())
-  //   train_loss_dataset.push(row.train_loss)
-  //   val_loss_dataset.push(row.val_loss)
-  //   train_accuracy_dataset.push(row.train_accuracy)
-  //   val_accuracy_dataset.push(row.val_accuracy)
-  // }
 
   return (
     <form
@@ -291,6 +309,9 @@ function Main(attrs: {}, context: Context) {
       <div id="demoMessage"></div>
       {ChartScript}
       <div style="width: 100%; max-height: 400px;">
+        <p>
+          <Locale en="Train Loss" zh_hk="訓練損失" zh_cn="训练损失" />
+        </p>
         <Chart
           canvas_id="train_loss_canvas"
           data_labels={chart_label}
@@ -300,6 +321,9 @@ function Main(attrs: {}, context: Context) {
         />
       </div>
       <div style="width: 100%; max-height: 400px;">
+        <p>
+          <Locale en="Validation Loss" zh_hk="驗證損失" zh_cn="验证损失" />
+        </p>
         <Chart
           canvas_id="val_loss_canvas"
           data_labels={chart_label}
@@ -309,6 +333,9 @@ function Main(attrs: {}, context: Context) {
         />
       </div>
       <div style="width: 100%; max-height: 400px;">
+        <p>
+          <Locale en="Train Accuracy" zh_hk="訓練準確率" zh_cn="训练准确率" />
+        </p>
         <Chart
           canvas_id="train_accuracy_canvas"
           data_labels={chart_label}
@@ -319,6 +346,13 @@ function Main(attrs: {}, context: Context) {
         />
       </div>
       <div style="width: 100%; max-height: 400px;">
+        <p>
+          <Locale
+            en="Validation Accuracy"
+            zh_hk="驗證準確率"
+            zh_cn="验证准确率"
+          />
+        </p>
         <Chart
           canvas_id="val_accuracy_canvas"
           data_labels={chart_label}
@@ -346,23 +380,30 @@ function SubmitTrain(attrs: {}, context: DynamicContext) {
   if (input.training_mode === 'scratch') {
     del(proxy.training_stats, { id: notNull })
     let code = /* javascript for reset chart */ `
-loss_canvas.chart.data.labels = []
-loss_canvas.chart.data.datasets[0].data = []
-loss_canvas.chart.data.datasets[1].data = []
-loss_canvas.chart.update();
-
-accuracy_canvas.chart.data.labels = []
-accuracy_canvas.chart.data.datasets[0].data = []
-accuracy_canvas.chart.data.datasets[1].data = []
-accuracy_canvas.chart.update();
+    train_loss_canvas.chart.data.labels = []
+    val_loss_canvas.chart.data.labels = []
+    train_accuracy_canvas.chart.data.labels = []
+    val_accuracy_canvas.chart.data.labels = []
+    for (let i = 0; i < ${MODEL_NO}; i++) {
+      train_loss_canvas.chart.data.datasets[i].data = []
+      val_loss_canvas.chart.data.datasets[i].data = []
+      train_accuracy_canvas.chart.data.datasets[i].data = []
+      val_accuracy_canvas.chart.data.datasets[i].data = []
+    }
+     train_loss_canvas.chart.update();
+     val_loss_canvas.chart.update();
+     train_accuracy_canvas.chart.update();
+     val_accuracy_canvas.chart.update();               
     `
     broadcast(['eval', code])
   }
 
-  let epoch = proxy.training_stats.length / 5 + 1
+  //get the last epoch number from training_stats table
+  let epoch = proxy.training_stats.length / MODEL_NO + 1
   async function train() {
     for (let i = 0; i < input.epoch_no; i++) {
-      for (let label_id = 1; label_id <= 5; label_id++) {
+      let data = []
+      for (let label_id = 1; label_id <= MODEL_NO; label_id++) {
         await sleep(50)
         let train_loss = Math.random() * 10
         let val_loss = Math.random() * 10
@@ -379,19 +420,51 @@ accuracy_canvas.chart.update();
           label_id,
         })
 
-        // let code = /* javascript for update chart */ `
-        // loss_canvas.chart.data.labels.push('${epoch}');
-        // loss_canvas.chart.data.datasets[0].data.push(${train_loss});
-        // loss_canvas.chart.data.datasets[1].data.push(${val_loss});
-        // loss_canvas.chart.update();
-
-        // accuracy_canvas.chart.data.labels.push('${epoch}');
-        // accuracy_canvas.chart.data.datasets[0].data.push(${train_accuracy});
-        // accuracy_canvas.chart.data.datasets[1].data.push(${val_accuracy});
-        // accuracy_canvas.chart.update();
-        //   `
-        // broadcast(['eval', code])
+        data.push({
+          epoch: epoch,
+          label: label_id,
+          train_loss: train_loss,
+          val_loss: val_loss,
+          train_accuracy: train_accuracy,
+          val_accuracy: val_accuracy,
+        })
       }
+
+      let code = /* javascript for update chart */ `
+      const data = ${JSON.stringify(data)};
+      const model_labels = ${JSON.stringify(model_labels())};
+      train_loss_canvas.chart.data.labels.push('${epoch}');
+      val_loss_canvas.chart.data.labels.push('${epoch}');
+      train_accuracy_canvas.chart.data.labels.push('${epoch}');
+      val_accuracy_canvas.chart.data.labels.push('${epoch}');
+
+      // if training_stats is empty, set the chart data
+      if (${proxy.training_stats.length === MODEL_NO}) { 
+        train_loss_canvas.chart.data.labels = ['1']
+        val_loss_canvas.chart.data.labels = ['1']
+        train_accuracy_canvas.chart.data.labels = ['1']
+        val_accuracy_canvas.chart.data.labels = ['1']
+        for (let i = 0; i < ${MODEL_NO}; i++) {
+          train_loss_canvas.chart.data.datasets[i] = {label: 'Model ' + model_labels[i] +' train_loss', data: []}
+          val_loss_canvas.chart.data.datasets[i] = {label: 'Model ' + model_labels[i] +' val_loss', data: []}
+          train_accuracy_canvas.chart.data.datasets[i] = {label: 'Model ' + model_labels[i] +' train_accuracy', data: []}
+          val_accuracy_canvas.chart.data.datasets[i] = {label: 'Model ' + model_labels[i] +' val_accuracy', data: []}
+        }
+      }
+
+      for (let i = 0; i < data.length; i++) {
+        train_loss_canvas.chart.data.datasets[i].data.push(data[i].train_loss);
+        val_loss_canvas.chart.data.datasets[i].data.push(data[i].val_loss);
+        train_accuracy_canvas.chart.data.datasets[i].data.push(data[i].train_accuracy);
+        val_accuracy_canvas.chart.data.datasets[i].data.push(data[i].val_accuracy);
+
+        train_loss_canvas.chart.update();
+        val_loss_canvas.chart.update();
+        train_accuracy_canvas.chart.update();
+        val_accuracy_canvas.chart.update();
+      } 
+      `
+      broadcast(['eval', code])
       epoch++
     }
   }
