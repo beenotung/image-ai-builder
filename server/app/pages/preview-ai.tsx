@@ -36,8 +36,13 @@ let style = Style(/* css */ `
 
 let script = Script(/* js */ `
 
+  document.querySelector('#webcamOutput').style.display = 'none';
+  document.querySelector('#image').style.display='none';
+
   function pickPreviewPhoto() {
   document.querySelector('#previewPhotoInput').click();
+  document.querySelector('#webcamOutput').style.display = 'none';
+  document.querySelector('#image').style.display='block';
 }
 
 document.querySelector('#previewPhotoInput').onchange = function(event) {
@@ -56,6 +61,42 @@ document.querySelector('#previewPhotoInput').onchange = function(event) {
   // Reset input so user can select the same file again if needed
   event.target.value = '';
 };
+
+currentStream = null;
+
+async function toggleWebcam() {
+  document.querySelector('#image').style.display='none';
+  document.querySelector('#webcamOutput').style.display = 'block';
+  document.querySelector("#webcamBtnOn").style.display="none";
+  document.querySelector("#webcamBtnOff").style.display="block";
+
+  if (currentStream) {
+    console.log('stopping')
+    // Stop all tracks to turn off the webcam
+    currentStream.getTracks().forEach(track => track.stop());
+    // Optionally clear the video source
+    const video = document.querySelector('video');
+    video.srcObject = null;
+    // Hide video
+    currentStream = null;
+    document.querySelector('#webcamOutput').style.display = 'none';
+    document.querySelector("#webcamBtnOff").style.display="none";
+    document.querySelector("#webcamBtnOn").style.display="block";
+  } else {
+    try {
+    console.log('starting')
+    currentStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    // Attach the stream to a video element:
+    const video = document.querySelector('video'); 
+    video.srcObject = currentStream;
+    video.play();
+    return currentStream;
+  } catch (err) {
+    console.error('Webcam access denied or error:', err);
+  }
+}
+  
+}
 `)
 
 let page = (
@@ -85,25 +126,39 @@ function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
   return (
     <>
-      <div style="display: flex; justify-content: center; margin-bottom: 1rem;">
+      <div style="padding: 30px; display: flex; justify-content: center; margin-bottom: 1rem;">
         <div style="display: flex; flex-direction: row; gap: 3rem; align-items: center;">
           <ion-button onclick="pickPreviewPhoto()">
             <ion-icon name="image-outline" slot="start"></ion-icon>{' '}
             <Locale en="Select Photo" zh_hk="選擇照片" zh_cn="选择照片" />
           </ion-button>
-          <ion-button>
+          <ion-button id="webcamBtnOn" onclick="toggleWebcam()">
             <ion-icon name="camera-outline" slot="start"></ion-icon>{' '}
             <Locale en="Open Camera" zh_hk="開啟相機" zh_cn="开启相机" />
+          </ion-button>
+          <ion-button
+            id="webcamBtnOff"
+            onclick="toggleWebcam()"
+            style="display: none;"
+          >
+            <ion-icon name="camera-outline" slot="start"></ion-icon>{' '}
+            <Locale en="Close Camera" zh_hk="關閉相機" zh_cn="关闭相机" />
           </ion-button>
         </div>
       </div>
       <div style="position: relative; width: 100%; height: 100%;">
-        {/* TODO: webcam output */}
-        {/* <div style="position: relative; text-align: center" id="webcamOutput">
-          <video id="webcamVideo" muted playsinline></video>
+        {/* webcam output */}
+        <div
+          style="border-radius: 0.5rem; box-shadow: 0 2px 8px #0001; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 200px;"
+          id="webcamOutput"
+        >
+          <video
+            id="webcamVideo align-items: center;"
+            muted
+            playsinline
+          ></video>
           <canvas id="webcamCanvas"></canvas>
-          
-        </div> */}
+        </div>
         {/* placeholder to display user selected image */}
         <div
           id="image"
