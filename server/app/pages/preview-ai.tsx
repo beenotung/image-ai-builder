@@ -16,6 +16,7 @@ import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { evalLocale, Locale } from '../components/locale.js'
 import { proxy } from '../../../db/proxy.js'
+import { Script } from '../components/script.js'
 
 let pageTitle = <Locale en="Preview AI" zh_hk="預覽 AI" zh_cn="预览 AI" />
 let addPageTitle = (
@@ -33,6 +34,30 @@ let style = Style(/* css */ `
 }
 `)
 
+let script = Script(/* js */ `
+
+  function pickPreviewPhoto() {
+  document.querySelector('#previewPhotoInput').click();
+}
+
+document.querySelector('#previewPhotoInput').onchange = function(event) {
+  
+  let file = event.target.files[0];
+  if (!file) return;
+
+  let reader = new FileReader();
+  reader.onload = function(e) {
+    let image = document.querySelector('img');
+    image.src = e.target.result;
+    image.file = file;
+  };
+  reader.readAsDataURL(file);
+
+  // Reset input so user can select the same file again if needed
+  event.target.value = '';
+};
+`)
+
 let page = (
   <>
     {style}
@@ -47,6 +72,7 @@ let page = (
     <ion-content id="PreviewAI" class="ion-no-padding">
       <Main />
     </ion-content>
+    {script}
   </>
 )
 
@@ -59,8 +85,34 @@ function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
   return (
     <>
-      <div style="position: relative;">
-        <div style="position: absolute; right: 0; top: 0; display: flex; flex-direction: column; gap: 0.25rem;">
+      <div style="display: flex; justify-content: center; margin-bottom: 1rem;">
+        <div style="display: flex; flex-direction: row; gap: 3rem; align-items: center;">
+          <ion-button onclick="pickPreviewPhoto()">
+            <ion-icon name="image-outline" slot="start"></ion-icon>{' '}
+            <Locale en="Select Photo" zh_hk="選擇照片" zh_cn="选择照片" />
+          </ion-button>
+          <ion-button>
+            <ion-icon name="camera-outline" slot="start"></ion-icon>{' '}
+            <Locale en="Open Camera" zh_hk="開啟相機" zh_cn="开启相机" />
+          </ion-button>
+        </div>
+      </div>
+      <div style="position: relative; width: 100%; height: 100%;">
+        {/* TODO: webcam output */}
+        {/* <div style="position: relative; text-align: center" id="webcamOutput">
+          <video id="webcamVideo" muted playsinline></video>
+          <canvas id="webcamCanvas"></canvas>
+          
+        </div> */}
+        {/* placeholder to display user selected image */}
+        <div
+          id="image"
+          style="border-radius: 0.5rem; box-shadow: 0 2px 8px #0001; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 200px;"
+        >
+          <img width="100%" height="100%" style="object-fit: contain;" />
+        </div>
+        {/* labels */}
+        <div style="position: absolute; right: 0; top: 0; display: flex; flex-direction: column; gap: 0.5rem; max-width: 40%;">
           {mapArray(proxy.label, label => (
             <div class="label-container">
               <div class="class-label">{label.title}</div>
@@ -68,9 +120,12 @@ function Main(attrs: {}, context: Context) {
             </div>
           ))}
         </div>
-        <img
-          src="https://picsum.photos/seed/2/3000/4000"
-          style="height: 100%"
+        {/* upload image input */}
+        <input
+          type="file"
+          id="previewPhotoInput"
+          accept="image/*"
+          style="display:none"
         />
       </div>
     </>
