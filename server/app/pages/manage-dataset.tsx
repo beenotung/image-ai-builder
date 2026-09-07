@@ -29,7 +29,7 @@ import {
 import { NoProjectMessage } from '../components/no-project-message.js'
 import { IonButton } from '../components/ion-button.js'
 import { env } from '../../env.js'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { promises as fsPromises, rmSync } from 'fs'
 import AdmZip from 'adm-zip'
 import { createUploadForm } from '../upload.js'
@@ -228,6 +228,7 @@ let style = Style(/* css */ `
   z-index: 10;
   background: transparent;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem;
@@ -236,6 +237,12 @@ let style = Style(/* css */ `
   --padding-start: 0.5rem;
   --padding-end: 0.5rem;
   font-size: 0.9rem;
+}
+#ManageDataset .browse-toolbar ion-button.icon-only-mobile ion-icon {
+  margin-inline-end: 0.35rem;
+}
+#ManageDataset .browse-toolbar ion-button.icon-only-mobile {
+  --padding-start: 0.75rem;
 }
 #label-toggle-container {
   z-index: 10;
@@ -434,8 +441,13 @@ let style = Style(/* css */ `
     display: none;
   }
   #ManageDataset .browse-toolbar ion-button.icon-only-mobile {
-    --padding-start: 0.5rem;
-    --padding-end: 0.5rem;
+    width: 40px;
+    height: 40px;
+    --padding-start: 0;
+    --padding-end: 0;
+  }
+  #ManageDataset .browse-toolbar ion-button.icon-only-mobile ion-icon {
+    margin: 0;
   }
 }
 #labelStatus.loading {
@@ -3030,19 +3042,26 @@ async function ImportDataset(context: ExpressContext) {
       skipped_images++
       continue
     }
-    let destPath = join(env.UPLOAD_DIR, metaImage.filename)
+    // Guard against path traversal: only allow a plain filename, never a path
+    // that could escape the upload dir (e.g. `../../etc/evil`).
+    let safeFilename = basename(metaImage.filename)
+    if (safeFilename !== metaImage.filename) {
+      skipped_images++
+      continue
+    }
+    let destPath = join(env.UPLOAD_DIR, safeFilename)
     let data = entry.getData()
     await fsPromises.writeFile(destPath, data)
 
     let newId = proxy.image.push({
       original_filename: metaImage.original_filename ?? null,
-      filename: metaImage.filename,
+      filename: safeFilename,
       user_id,
       rotation: metaImage.rotation ?? null,
       project_id,
       content_hash: metaImage.content_hash ?? null,
     })
-    imageIdByFilename.set(metaImage.filename, newId)
+    imageIdByFilename.set(safeFilename, newId)
     imported_images++
   }
 
