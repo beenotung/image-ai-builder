@@ -466,7 +466,7 @@ function getProjectId() {
 // ---------- shared state ----------
 let imagesData = [];
 let filteredImagesData = [];
-let isLabelVisible = true;
+let isLabelVisible = false;
 let isBoundingBoxVisible = false;
 let bboxCountFilters = []; // empty = all, [1,2,3...] = specific counts
 let labelStates = [];
@@ -1711,12 +1711,12 @@ function Main(attrs: {}, context: DynamicContext) {
           <div style="position: relative;">
             <ion-button id="toggle-labels-button" onclick="toggleLabels()">
               <span>
-                <Locale en="Hide" zh_hk="隱藏" zh_cn="隐藏" />
+                <Locale en="Show Labels" zh_hk="顯示標籤" zh_cn="显示标签" />
               </span>
             </ion-button>
             <div
               id="label-toggle-container"
-              style="position: absolute; top: 100%; right: 0; margin-top: 0.25rem; display: flex; flex-direction: column; gap: 0.25rem; z-index: 10;"
+              style="position: absolute; top: 100%; right: 0; margin-top: 0.25rem; display: none; flex-direction: column; gap: 0.25rem; z-index: 10;"
             >
               {mapArray(labels, label => {
                 let annotated_count = count_annotated_images.get({
@@ -1853,7 +1853,7 @@ function Main(attrs: {}, context: DynamicContext) {
           setFilteredImagesData(${JSON.stringify(filteredImages)});
           initLabelStates(${JSON.stringify(labels)});
           labelStates = ${JSON.stringify(labelStatesArray)};
-          isLabelVisible = true;
+          isLabelVisible = false;
           isSelectionMode = false;
           selectedImages = [];
           updateSelectAllButton();
