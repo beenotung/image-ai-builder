@@ -425,6 +425,17 @@ let style = Style(/* css */ `
   #exportConfirmModal > div > div:last-child > div:first-child > ion-button {
     width: 100% !important;
   }
+  #exportDatasetModal > div,
+  #exportDatasetModal .label-selection-container {
+    min-width: auto !important;
+    max-width: 92vw !important;
+    width: 92vw !important;
+    max-height: 40vh !important;
+    box-sizing: border-box !important;
+  }
+  #exportDatasetModal .dataset-label-filter-row {
+    flex-wrap: wrap !important;
+  }
 
   /* ---------- browse toolbar: mobile responsive ---------- */
   #ManageDataset .browse-toolbar {
@@ -824,7 +835,19 @@ function exportImages() {
 
 // ---------- browse: dataset export / import ----------
 function exportDataset() {
-  emit('/manage-dataset/export-dataset', { project_id: getProjectId() });
+  const modal = document.getElementById('exportDatasetModal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeExportDatasetModal() {
+  const modal = document.getElementById('exportDatasetModal');
+  if (modal) modal.style.display = 'none';
+}
+function submitExportDataset() {
+  closeExportDatasetModal();
+  const filters = Array.from(document.querySelectorAll('.dataset-label-filter-radio:checked'))
+    .filter(radio => radio.value !== 'all')
+    .map(radio => ({ label_id: parseInt(radio.dataset.labelId), answer: radio.value }));
+  emit('/manage-dataset/export-dataset', { project_id: getProjectId(), label_filters: filters });
 }
 function importDataset(event) {
   const input = event.target;
@@ -1223,16 +1246,17 @@ let select_project_labels_full = db.prepare<
   ORDER BY l.display_order ASC
 `)
 
-// latest answer per image+label in a project (with label title)
+// latest answer per image+label in a project (with label id + title)
 let select_project_image_labels = db.prepare<
   { project_id: number },
   {
     image_id: number
+    label_id: number
     label_title: string
     answer: number
   }
 >(/* sql */ `
-  SELECT il.image_id, l.title AS label_title, il.answer
+  SELECT il.image_id, il.label_id, l.title AS label_title, il.answer
   FROM image_label il
   INNER JOIN image ON image.id = il.image_id
   INNER JOIN label l ON l.id = il.label_id
@@ -1609,6 +1633,94 @@ function Main(attrs: {}, context: DynamicContext) {
                 <Locale en="Cancel" zh_hk="取消" zh_cn="取消" />
               </ion-button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------- dataset export filter modal ---------- */}
+      <div
+        id="exportDatasetModal"
+        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; justify-content:center; align-items:center;"
+      >
+        <div
+          class="modal-content"
+          style="background:#fff; border-radius:8px; padding:2rem; min-width:300px; max-width:500px; box-shadow:0 2px 16px #0002; text-align:center;"
+        >
+          <div style="margin-bottom:0.5rem;">
+            <Locale
+              en="Filter images to export"
+              zh_hk="篩選要匯出的圖片"
+              zh_cn="筛选要导出的图片"
+            />
+          </div>
+          <div style="font-size:0.8rem; color:#666; margin-bottom:1rem;">
+            <Locale
+              en="Leave all as 'All' to export every image"
+              zh_hk="全部保持「全部」則匯出所有圖片"
+              zh_cn="全部保持「全部」则导出所有图片"
+            />
+          </div>
+          <div
+            class="label-selection-container"
+            style="max-height:200px; overflow-y:auto; margin-bottom:1rem;"
+          >
+            {mapArray(labels, label => (
+              <div
+                class="dataset-label-filter-row"
+                style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; font-size:0.9rem; margin:0.5rem 0; border-bottom:1px solid #eee; padding-bottom:0.5rem;"
+              >
+                <span style="font-weight:500;">{label.title}</span>
+                <span style="display:flex; align-items:center; gap:0.75rem; font-size:0.85rem;">
+                  <label style="display:flex; align-items:center; gap:0.25rem;">
+                    <input
+                      type="radio"
+                      class="dataset-label-filter-radio"
+                      name={'label-filter-' + label.id}
+                      data-label-id={label.id}
+                      value="all"
+                      checked
+                    />
+                    <Locale en="All" zh_hk="全部" zh_cn="全部" />
+                  </label>
+                  <label style="display:flex; align-items:center; gap:0.25rem;">
+                    <input
+                      type="radio"
+                      class="dataset-label-filter-radio"
+                      name={'label-filter-' + label.id}
+                      data-label-id={label.id}
+                      value="yes"
+                    />
+                    <Locale en="Yes" zh_hk="是" zh_cn="是" />
+                  </label>
+                  <label style="display:flex; align-items:center; gap:0.25rem;">
+                    <input
+                      type="radio"
+                      class="dataset-label-filter-radio"
+                      name={'label-filter-' + label.id}
+                      data-label-id={label.id}
+                      value="no"
+                    />
+                    <Locale en="No" zh_hk="否" zh_cn="否" />
+                  </label>
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style="display:flex; justify-content:center; gap:1rem;">
+            <ion-button
+              style="width:150px; height:40px;"
+              color="primary"
+              onclick="submitExportDataset()"
+            >
+              <Locale en="Export" zh_hk="匯出" zh_cn="导出" />
+            </ion-button>
+            <ion-button
+              style="width:150px; height:40px;"
+              fill="outline"
+              onclick="closeExportDatasetModal()"
+            >
+              <Locale en="Cancel" zh_hk="取消" zh_cn="取消" />
+            </ion-button>
           </div>
         </div>
       </div>
@@ -2773,6 +2885,12 @@ function BatchExport(attrs: {}, context: WsContext) {
 // ---------------------------------------------------------------------------
 let exportDatasetParser = object({
   project_id: id(),
+  label_filters: array(
+    object({
+      label_id: id(),
+      answer: values(['yes' as const, 'no' as const]),
+    }),
+  ),
 })
 
 function ExportDataset(attrs: {}, context: WsContext) {
@@ -2790,6 +2908,34 @@ function ExportDataset(attrs: {}, context: WsContext) {
     let labels = select_project_labels_full.all({ project_id })
     let imageLabels = select_project_image_labels.all({ project_id })
     let boxes = select_project_bounding_boxes_full.all({ project_id })
+
+    // filter images by label yes/no conditions (AND semantics)
+    let label_filters = input.label_filters || []
+    if (label_filters.length > 0) {
+      let selectedLabelIds = new Set(label_filters.map(f => f.label_id))
+      // latest answer per image+label (1=yes, 0=no)
+      let answersByImage = new Map<number, Map<number, number>>()
+      for (let il of imageLabels) {
+        if (!answersByImage.has(il.image_id))
+          answersByImage.set(il.image_id, new Map())
+        answersByImage.get(il.image_id)!.set(il.label_id, il.answer)
+      }
+      let expected = new Map(
+        label_filters.map(
+          f => [f.label_id, f.answer === 'yes' ? 1 : 0] as const,
+        ),
+      )
+      images = images.filter(img => {
+        let answers = answersByImage.get(img.id!)
+        if (!answers) return false
+        for (let [label_id, expected_answer] of expected) {
+          if (answers.get(label_id) !== expected_answer) return false
+        }
+        return true
+      })
+      // keep only answers of selected labels in exported metadata
+      imageLabels = imageLabels.filter(il => selectedLabelIds.has(il.label_id))
+    }
 
     // group image_labels by image_id
     let labelsByImage = new Map<
