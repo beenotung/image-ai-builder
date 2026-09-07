@@ -17,7 +17,7 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { Locale, ProjectPageTitle } from '../components/locale.js'
-import { proxy } from '../../../db/proxy.js'
+import { proxy, Label } from '../../../db/proxy.js'
 import { db } from '../../../db/db.js'
 import { getContextProject } from '../context/project-context.js'
 import { NoProjectMessage } from '../components/no-project-message.js'
@@ -63,6 +63,34 @@ let style = Style(/* css */ `
   border-top-right-radius: 0.5rem;
   border-bottom-right-radius: 0.5rem;
 }
+.stats-box-table-scroll {
+  overflow-x: auto;
+}
+.stats-box-table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+.stats-box-table th,
+.stats-box-table td {
+  border: 1px solid var(--ion-border-color, #dedede);
+  padding: 0.375rem 0.75rem;
+  text-align: center;
+  white-space: nowrap;
+}
+.stats-box-table th {
+  background-color: var(--ion-color-light, #f4f5f8);
+  font-weight: 600;
+}
+.stats-box-table th.stats-box-table--label,
+.stats-box-table td.stats-box-table--label {
+  text-align: left;
+}
+.stats-box-table tbody tr:nth-child(even) {
+  background-color: var(--ion-color-light-shade, #eff0f2);
+}
+.stats-box-table--total {
+  font-weight: 600;
+}
 `)
 
 let page = (
@@ -100,6 +128,39 @@ where image.project_id = :project_id
 group by label.id, image.id
 `)
 
+// get bounding box count distribution by label_id
+/* example:
+[
+  { box_count: 0, image_count: 3 },
+  { box_count: 1, image_count: 5 },
+  { box_count: 2, image_count: 2 },
+]
+*/
+let select_box_count_distribution = db.prepare<
+  { label_id: number; project_id: number },
+  { box_count: number; image_count: number }
+>(/* sql */ `
+with list as (
+  select image_label.image_id
+  , count(distinct image_bounding_box.id) as box_count
+  from image_label
+  left join image_bounding_box
+    on image_bounding_box.image_id = image_label.image_id
+   and image_bounding_box.label_id = image_label.label_id
+  where image_label.label_id = :label_id
+  and image_label.answer = 1
+  and exists (
+    select 1 from image
+    where image.id = image_label.image_id
+    and image.project_id = :project_id
+  )
+  group by image_label.image_id
+)
+select box_count, count(*) as image_count
+from list
+group by box_count
+`)
+
 function Main(attrs: {}, context: DynamicContext) {
   let user = getAuthUser(context)
   let project = getContextProject(context)
@@ -133,6 +194,27 @@ function Main(attrs: {}, context: DynamicContext) {
     }
   }
 
+  // label -> { box_count -> image_count }
+  let boxDistribution: {
+    [label_id: number]: { [box_count: number]: number }
+  } = {}
+  let maxBoxCount = 0
+  for (let label of projectLabels) {
+    let label_id = label.id!
+    let counts: { [box_count: number]: number } = {}
+    for (let row of select_box_count_distribution.all({
+      label_id,
+      project_id,
+    })) {
+      counts[row.box_count] = row.image_count
+      if (row.box_count > maxBoxCount) maxBoxCount = row.box_count
+    }
+    boxDistribution[label_id] = counts
+  }
+  let sortedLabels = [...projectLabels].sort(
+    (a, b) => (a.display_order ?? 999999) - (b.display_order ?? 999999),
+  )
+
   return (
     <>
       <h2 class="ion-padding-horizontal">
@@ -159,23 +241,42 @@ function Main(attrs: {}, context: DynamicContext) {
           </div>
         </div>
       </div>
-      {mapArray(
-        [...projectLabels].sort(
-          (a, b) => (a.display_order ?? 999999) - (b.display_order ?? 999999),
-        ),
-        label => {
-          let label_id = label.id!
-          let { yes, no, unknown } = labels[label_id]
-          return (
-            <ion-card class="stats-item">
-              <ion-card-content>
-                <div class="stats-label">{label.title}</div>
-                <StatsChart yes={yes} unknown={unknown} no={no} />
-              </ion-card-content>
-            </ion-card>
-          )
-        },
-      )}
+      {mapArray(sortedLabels, label => {
+        let label_id = label.id!
+        let { yes, no, unknown } = labels[label_id]
+        return (
+          <ion-card class="stats-item">
+            <ion-card-content>
+              <div class="stats-label">{label.title}</div>
+              <StatsChart yes={yes} unknown={unknown} no={no} />
+            </ion-card-content>
+          </ion-card>
+        )
+      })}
+      <ion-card class="stats-item">
+        <ion-card-content>
+          <h2 class="stats-label">
+            <ion-icon name="cube-outline" />{' '}
+            <Locale
+              en="Bounding Box Stats"
+              zh_hk="邊界框統計"
+              zh_cn="边界框统计"
+            />
+          </h2>
+          <p>
+            <Locale
+              en="Number of images by bounding box count (images labeled as Yes only)."
+              zh_hk="按邊界框數量統計的圖片數（只計標記為「是」的圖片）。"
+              zh_cn="按边界框数量统计的图片数（只计标记为「是」的图片）。"
+            />
+          </p>
+          <BoxStatsTable
+            labels={sortedLabels}
+            distribution={boxDistribution}
+            maxBoxCount={maxBoxCount}
+          />
+        </ion-card-content>
+      </ion-card>
     </>
   )
 }
@@ -204,6 +305,60 @@ function StatsChart(attrs: { yes: number; unknown: number; no: number }) {
         <span>{no}</span>{' '}
         <span hidden={no === 0}>({Math.round((no / total) * 100)}%)</span>
       </div>
+    </div>
+  )
+}
+
+function BoxStatsTable(attrs: {
+  labels: Label[]
+  distribution: { [label_id: number]: { [box_count: number]: number } }
+  maxBoxCount: number
+}) {
+  let { labels, distribution, maxBoxCount } = attrs
+  let boxCounts = Array.from({ length: maxBoxCount + 1 }, (_, i) => i)
+  return (
+    <div class="stats-box-table-scroll">
+      <table class="stats-box-table">
+        <thead>
+          <tr>
+            <th class="stats-box-table--label">
+              <Locale en="Label" zh_hk="標籤" zh_cn="标签" />
+            </th>
+            {mapArray(boxCounts, boxCount => (
+              <th>
+                <Locale
+                  en={`Boxes: ${boxCount}`}
+                  zh_hk={`框數 ${boxCount}`}
+                  zh_cn={`框数 ${boxCount}`}
+                />
+              </th>
+            ))}
+            <th>
+              <Locale en="Total" zh_hk="合計" zh_cn="合计" />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {mapArray(labels, label => {
+            let label_id = label.id!
+            let counts = distribution[label_id] || {}
+            // total boxes = sum of (box_count * image_count), box_count 0 contributes nothing
+            let total = boxCounts.reduce(
+              (sum, boxCount) => sum + boxCount * (counts[boxCount] || 0),
+              0,
+            )
+            return (
+              <tr>
+                <td class="stats-box-table--label">{label.title}</td>
+                {mapArray(boxCounts, boxCount => (
+                  <td>{counts[boxCount] || 0}</td>
+                ))}
+                <td class="stats-box-table--total">{total}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
