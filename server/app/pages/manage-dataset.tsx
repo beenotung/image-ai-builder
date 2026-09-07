@@ -29,8 +29,9 @@ import {
 import { NoProjectMessage } from '../components/no-project-message.js'
 import { IonButton } from '../components/ion-button.js'
 import { env } from '../../env.js'
-import { basename, join } from 'path'
-import { promises as fsPromises, rmSync } from 'fs'
+import { basename, extname, join } from 'path'
+import { existsSync, promises as fsPromises, rmSync } from 'fs'
+import { randomUUID } from 'crypto'
 import AdmZip from 'adm-zip'
 import { createUploadForm } from '../upload.js'
 
@@ -2647,8 +2648,21 @@ function BatchDelete(attrs: {}, context: WsContext) {
         del(proxy.image_label, { image_id })
         del(proxy.image, { id: image_id })
         try {
-          const filePath = join(env.UPLOAD_DIR, filename)
-          fsPromises.rm(filePath, { force: true })
+          // only delete the physical file when no other image row
+          // (e.g. in another project) still references the same filename
+          const stillUsed = db
+            .prepare<{ filename: string; image_id: number }, number>(
+              /* sql */ `
+              select count(*) from image
+              where filename = :filename and id != :image_id
+              `,
+            )
+            .pluck()
+            .get({ filename, image_id })
+          if (!stillUsed) {
+            const filePath = join(env.UPLOAD_DIR, filename)
+            fsPromises.rm(filePath, { force: true })
+          }
         } catch (err) {
           errors.push(`Image ID ${image_id}: file delete failed: ${err}`)
         }
@@ -3195,13 +3209,29 @@ async function ImportDataset(context: ExpressContext) {
       skipped_images++
       continue
     }
-    let destPath = join(env.UPLOAD_DIR, safeFilename)
+    // generate a fresh unique filename so the imported image does not
+    // share the same physical file with rows in other projects
+    // (deleting it in one project would break the other project)
+    let ext = extname(safeFilename)
+    let storedFilename = ''
+    for (let i = 0; i < 10; i++) {
+      let candidate = randomUUID() + ext
+      if (!existsSync(join(env.UPLOAD_DIR, candidate))) {
+        storedFilename = candidate
+        break
+      }
+    }
+    if (!storedFilename) {
+      skipped_images++
+      continue
+    }
+    let destPath = join(env.UPLOAD_DIR, storedFilename)
     let data = entry.getData()
     await fsPromises.writeFile(destPath, data)
 
     let newId = proxy.image.push({
-      original_filename: metaImage.original_filename ?? null,
-      filename: safeFilename,
+      original_filename: metaImage.original_filename ?? safeFilename,
+      filename: storedFilename,
       user_id,
       rotation: metaImage.rotation ?? null,
       project_id,

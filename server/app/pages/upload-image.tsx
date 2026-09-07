@@ -463,7 +463,11 @@ function Main(attrs: {}, context: DynamicContext) {
             </ion-button>
           </div>
         ) : null}
-        <div id="uploadQueueStatus" hidden style="margin-top: 0.5rem; font-weight: 600;"></div>
+        <div
+          id="uploadQueueStatus"
+          hidden
+          style="margin-top: 0.5rem; font-weight: 600;"
+        ></div>
         <div id="uploadQueueSection" hidden>
           <div style="font-size: 0.75rem; color: #666; margin-top: 0.5rem;">
             <Locale en="Upload Queue" zh_hk="上傳佇列" zh_cn="上传队列" />
@@ -727,8 +731,20 @@ async function RemoveImage(context: ExpressContext) {
       // Finally delete the image
       del(proxy.image, { filename })
     }
-    let file = join(env.UPLOAD_DIR, filename)
-    await rm(file, { force: true })
+    // only delete the physical file when no other image row
+    // (e.g. in another project) still references the same filename
+    let stillUsed = db
+      .prepare<{ filename: string }, number>(
+        /* sql */ `
+        select count(*) from image where filename = :filename
+        `,
+      )
+      .pluck()
+      .get({ filename })
+    if (!stillUsed) {
+      let file = join(env.UPLOAD_DIR, filename)
+      await rm(file, { force: true })
+    }
     let new_count = count(proxy.image, { project_id })
     return { count: new_count }
   } catch (error) {
