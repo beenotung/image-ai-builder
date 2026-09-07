@@ -34,7 +34,8 @@ let pageTitle = (
 
 let style = Style(/* css */ `
 #ReviewBoundingBox {
-
+  /* max displayed image height; width is limited by the column width */
+  --review-bbox-img-max-height: 400px;
 }
 
 ion-col {
@@ -46,10 +47,22 @@ ion-col {
 
 .image-item img {
   display: block;
+  max-width: 100%;
+  max-height: var(--review-bbox-img-max-height);
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 .image-item > div[style*="position: relative"] {
   line-height: 0;
+}
+
+.image-item > div[style*="position: relative"] > canvas {
+  max-width: 100%;
+  max-height: var(--review-bbox-img-max-height);
+  width: auto;
+  height: auto;
 }
 `)
 
@@ -155,12 +168,20 @@ let script = Script(/* js */ `
       return
     }
 
-    // Resize canvas to match image size
-    canvas.width = image.clientWidth;
-    canvas.height = image.clientHeight;
+    // The img is visually scaled down by CSS (max-width/max-height), so
+    // clientWidth/clientHeight is the displayed size, not the natural size.
+    // Draw boxes in displayed-pixel space by scaling the 0..1 normalized
+    // coordinates with the displayed size, which keeps them aligned with
+    // the scaled-down image.
+    const displayWidth = image.clientWidth
+    const displayHeight = image.clientHeight
+
+    // Resize canvas to match displayed image size
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
     // Ensure CSS size also matches to avoid layout scaling mismatches
-    canvas.style.width = image.clientWidth + 'px';
-    canvas.style.height = image.clientHeight + 'px';
+    canvas.style.width = displayWidth + 'px';
+    canvas.style.height = displayHeight + 'px';
     canvas.style.pointerEvents = 'none';
 
     const context = canvas.getContext('2d');
@@ -170,10 +191,11 @@ let script = Script(/* js */ `
     context.lineWidth = lineWidth;
 
     boxes.forEach((box) => {
-      const width = box.width * canvas.width
-      const height = box.height * canvas.height
-      const left = box.x * canvas.width - width / 2
-      const top = box.y * canvas.height - height / 2
+      // normalized 0..1 coords scaled to the displayed (possibly shrunk) size
+      const width = box.width * displayWidth
+      const height = box.height * displayHeight
+      const left = box.x * displayWidth - width / 2
+      const top = box.y * displayHeight - height / 2
 
       // Save the current context state
       context.save();
