@@ -51,24 +51,27 @@ export async function getClassifierModel(label: Label, project_id: number) {
 }
 
 export async function getBestClassifierModel(label: Label, project_id: number) {
-  let bestClassifierModelPromise = loadImageClassifierModel({
-    baseModel,
-    modelDir: `saved_models/project-${project_id}/best/label-${label.id}`,
-    datasetDir: `datasets/label-${label.id}`,
-    classNames: ['yes', 'no'],
-    hiddenLayers: [
-      calcHiddenLayerSize({
-        inputSize: baseModel.spec.features,
-        outputSize: 2,
-        // 1 to 5
-        // 1 is easiest
-        // 5 is hardest
-        difficulty: 3,
-      }),
-    ],
-  })
-  classifierModelCache[`project-${project_id}-${label.title}-best`] =
-    bestClassifierModelPromise
+  let cacheKey = `project-${project_id}-${label.title}-best`
+  let bestClassifierModelPromise = classifierModelCache[cacheKey]
+  if (!bestClassifierModelPromise) {
+    bestClassifierModelPromise = loadImageClassifierModel({
+      baseModel,
+      modelDir: `saved_models/project-${project_id}/best/label-${label.id}`,
+      datasetDir: `datasets/label-${label.id}`,
+      classNames: ['yes', 'no'],
+      hiddenLayers: [
+        calcHiddenLayerSize({
+          inputSize: baseModel.spec.features,
+          outputSize: 2,
+          // 1 to 5
+          // 1 is easiest
+          // 5 is hardest
+          difficulty: 3,
+        }),
+      ],
+    })
+    classifierModelCache[cacheKey] = bestClassifierModelPromise
+  }
   return bestClassifierModelPromise
 }
 

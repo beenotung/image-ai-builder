@@ -30,6 +30,11 @@ import {
   select_project_label,
 } from '../context/project-context.js'
 import { NoProjectMessage } from '../components/no-project-message.js'
+import { existsSync } from 'fs'
+import { join } from 'path'
+import { env } from '../../env.js'
+import { baseModel, getBestClassifierModel } from '../model.js'
+import * as tf from '@tensorflow/tfjs'
 
 let sweetAlertPlugin = loadClientPlugin({
   entryFile: 'dist/client/sweetalert.js',
@@ -45,6 +50,29 @@ let style = Style(/* css */ `
   flex-grow: 1;
   margin: 0;
   height: 4rem;
+}
+/* AI suggestion dialog: smaller popup & title, image thumbnail as icon */
+.swal2-container .ai-suggest-popup {
+  width: auto;
+  min-width: 20em;
+}
+.swal2-container .ai-suggest-title {
+  font-size: 1.1em;
+}
+.swal2-container .ai-suggest-icon {
+  width: 10em !important;
+  height: 10em !important;
+  margin: 1em auto 0.6em !important;
+  border: none !important;
+  border-radius: 0.5em !important;
+  zoom: 1 !important;
+}
+.swal2-container .ai-suggest-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.5em;
 }
 `)
 
@@ -76,6 +104,96 @@ function submitAnnotation(answer) {
     rotation,
     project_id: getProjectId(),
   });
+}
+
+// AI Assist: asks the trained AI model how well the current image matches the
+// selected label, then suggests an answer in a confirm dialog.
+// Skipped silently when the label has no trained model yet.
+let aiAssistEnabled = localStorage.getItem('ai_assist_enabled') !== '0'
+let lastAskedKey = null
+
+function isAIAssistEnabled() {
+  return localStorage.getItem('ai_assist_enabled') !== '0'
+}
+
+async function askAISuggestion() {
+  if (!isAIAssistEnabled()) return
+  let image = document.getElementById('label_image')
+  let image_id = image.dataset.imageId
+  if (!image_id) return
+  let label_id = document.getElementById('label_select').value
+  if (!label_id) return
+  // avoid asking repeatedly for the same image & label
+  let askedKey = label_id + ':' + image_id
+  if (askedKey === lastAskedKey) return
+  lastAskedKey = askedKey
+
+  let res = await fetch_json(
+    '/annotate-image/predict?label=' + label_id +
+    '&image=' + image_id +
+    '&project=' + getProjectId(),
+    { title: 'askAISuggestion' }
+  )
+  if (!res || res.probability == null) return // no trained model yet
+
+  let percent = Math.round(res.probability * 100)
+  let texts = window.aiTexts || {}
+  let suggest_yes = percent >= 50
+  // Show the current image as the dialog icon (instead of the question mark)
+  let image_src = image.src
+  let result = await Swal.fire({
+    title: (texts.title || '').replace('{percent}', percent),
+    text: suggest_yes ? texts.suggest_yes : texts.suggest_no,
+    icon: 'question',
+    iconHtml: image_src
+      ? '<img class="ai-suggest-thumbnail" src="' + image_src + '">'
+      : undefined,
+    customClass: {
+      popup: 'ai-suggest-popup',
+      title: 'ai-suggest-title',
+      icon: 'ai-suggest-icon',
+    },
+    // Disable the built-in icon spin/flip animation (it rotates the thumbnail).
+    // prepareParams() merges our showClass with the defaults, which include
+    // icon: 'swal2-icon-show' — so we must explicitly override icon to '' to
+    // stop the swal2-animate-question-mark / swal2-animate-error-icon CSS
+    // animations from running.
+    showClass: {
+      popup: 'swal2-show',
+      backdrop: 'swal2-backdrop-show',
+      icon: '',
+    },
+    showConfirmButton: true,
+    showCancelButton: true,
+    confirmButtonText: texts.yes,
+    cancelButtonText: texts.no,
+    // Highlight the suggested answer; the other button stays neutral gray
+    // (SweetAlert2's default confirm color is purple, so set both explicitly)
+    confirmButtonColor: suggest_yes ? '#28a745' : '#6e7881',
+    cancelButtonColor: suggest_yes ? '#6e7881' : '#dc3545',
+    // Focus the suggested answer so Space accepts the AI suggestion directly
+    focusCancel: !suggest_yes,
+    heightAuto: false,
+  })
+  if (result.isConfirmed) {
+    submitAnnotation(1)
+  } else if (result.dismiss === 'cancel') {
+    submitAnnotation(0)
+  }
+  // other dismissals (Esc / outside click / close button) -> no annotation
+}
+
+// Syncs the AI assist toggle UI with the stored state
+function initAIAssistToggle() {
+  let toggle = document.getElementById('ai_assist_toggle')
+  if (!toggle) return
+  toggle.checked = isAIAssistEnabled()
+}
+
+function toggleAIAssist(event) {
+  let enabled = event.target.checked
+  localStorage.setItem('ai_assist_enabled', enabled ? '1' : '0')
+  aiAssistEnabled = enabled
 }
 
 label_select.addEventListener('ionChange', function(event) {
@@ -146,6 +264,7 @@ window.onServerMessage = window.onServerMessage || function(message) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initAIAssistToggle()
   const labelSelect = document.getElementById('label_select');
   if (!labelSelect) {
     console.error('label_select not found');
@@ -172,6 +291,10 @@ function getProjectId() {
 //   ArrowLeft  -> annotate as NO  (reject)
 //   ArrowRight -> annotate as YES (agree)
 //   ArrowUp    -> undo last annotation
+// When the AI suggestion dialog is open, its own keyboard handling takes over:
+//   Space/Enter -> activate the focused button (是/否)
+//   ArrowLeft/ArrowRight -> move focus between 是/否
+//   Esc -> skip (no annotation)
 // Long-press detection: a single press fires once immediately.
 // If the key is held for 1 second, it starts repeating continuously.
 const LONG_PRESS_MS = 1000
@@ -188,6 +311,12 @@ document.addEventListener('keydown', function(event) {
     tag === 'ion-select' ||
     (target && target.isContentEditable)
   if (isEditable) return
+
+  // While the AI suggestion dialog is open, skip the annotation shortcuts
+  // (the dialog handles its own keys: Space/Enter confirm, arrows switch focus)
+  if (document.body.classList.contains('swal2-shown')) {
+    return
+  }
 
   const key = event.key
   const isArrow = key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp'
@@ -246,9 +375,36 @@ let page = (
     </ion-content>
     {imagePlugin.node}
     {sweetAlertPlugin.node}
+    <AIScript />
     {script}
   </>
 )
+
+// Injects localized texts for the AI suggestion dialog (used by the client
+// script below, which is a static string and cannot use Locale directly)
+function AIScript(attrs: {}, context: DynamicContext) {
+  let texts = {
+    title: Locale(
+      {
+        en: 'AI thinks this image is {percent}% likely to have this label',
+        zh_hk: 'AI 認為此圖片有 {percent}% 屬於此標籤',
+        zh_cn: 'AI 认为此图像有 {percent}% 属于此标签',
+      },
+      context,
+    ),
+    suggest_yes: Locale(
+      { en: 'AI suggests: YES', zh_hk: 'AI 建議：是', zh_cn: 'AI 建议：是' },
+      context,
+    ),
+    suggest_no: Locale(
+      { en: 'AI suggests: NO', zh_hk: 'AI 建議：否', zh_cn: 'AI 建议：否' },
+      context,
+    ),
+    yes: Locale({ en: 'Yes', zh_hk: '是', zh_cn: '是' }, context),
+    no: Locale({ en: 'No', zh_hk: '否', zh_cn: '否' }, context),
+  }
+  return <script>aiTexts = {JSON.stringify(texts)}</script>
+}
 
 let count_annotated_images = db
   .prepare<{ label_id: number; project_id: number }, number>(
@@ -325,6 +481,15 @@ function Main(attrs: {}, context: DynamicContext) {
             })}
           </ion-select>
         </ion-item>
+        <ion-item lines="none">
+          <ion-toggle
+            id="ai_assist_toggle"
+            checked
+            onclick="toggleAIAssist(event)"
+          >
+            <Locale en="AI Assist" zh_hk="AI 協助" zh_cn="AI 协助" />
+          </ion-toggle>
+        </ion-item>
         <div style="flex-grow: 1; overflow: hidden">
           <img
             data-image-id={image?.id}
@@ -340,7 +505,7 @@ function Main(attrs: {}, context: DynamicContext) {
             }
             style="max-height: 60vh; max-width: 100%; width: auto; height: auto; object-fit: contain;"
             onclick="rotateAnnotationImage(this)"
-            onload="initAnnotationImage(this)"
+            onload="initAnnotationImage(this); if (window.askAISuggestion) askAISuggestion()"
             hidden={!image}
           />
           <div
@@ -469,6 +634,49 @@ async function getNextImage(context: ExpressContext) {
   }
 }
 
+// Predicts how well the current image matches the selected label with the
+// trained AI model (best checkpoint). Returns null probability when the
+// label has no trained model yet, so the client can skip the suggestion.
+async function predictImage(context: ExpressContext) {
+  let { req } = context
+  try {
+    let user = getAuthUser(context)
+    if (!user) throw 'You must be logged in to annotate image'
+    let label_id = +req.query.label!
+    let image_id = +req.query.image!
+    let project_id = +req.query.project! || 1
+    if (!label_id) throw 'missing label'
+    if (!image_id) throw 'missing image'
+
+    // Only suggest when a trained model exists (best checkpoint). Without
+    // this check getBestClassifierModel would return a fresh untrained model.
+    let modelDir = `saved_models/project-${project_id}/best/label-${label_id}`
+    if (!existsSync(join(modelDir, 'model.json'))) {
+      return { probability: null }
+    }
+
+    let label = proxy.label[label_id]
+    let image = proxy.image[image_id]
+    if (!label) throw 'label not found'
+    if (!image) throw 'image not found'
+
+    let model = await getBestClassifierModel(label, project_id)
+    let embedding = await baseModel.imageFileToEmbedding(
+      join(env.UPLOAD_DIR, image.filename!),
+    )
+    let prediction = model.classifierModel.predict(embedding) as tf.Tensor
+    // Apply softmax since the output layer uses 'linear' activation
+    let softmax = tf.softmax(prediction)
+    let probabilities = (await softmax.array()) as number[][]
+    prediction.dispose()
+    softmax.dispose()
+    embedding.dispose()
+    return { probability: probabilities[0][1] } // probability of 'yes'
+  } catch (error) {
+    return { error: String(error) }
+  }
+}
+
 // Selects the last image_label for the current user (for undo)
 let select_previous_image_label = db.prepare<
   { user_id: number; label_id: number; project_id: number },
@@ -577,7 +785,7 @@ function ShowImage(attrs: {}, context: WsContext) {
     if (next_image) {
       context.ws.send([
         'eval',
-        `label_image.onload = () => initAnnotationImage(label_image)`,
+        `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }`,
       ])
     }
 
@@ -709,7 +917,7 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
     // Set up client-side image rotation on load
     context.ws.send([
       'eval',
-      `label_image.onload = () => initAnnotationImage(label_image)`,
+      `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }`,
     ])
 
     // Terminate execution to prevent further processing
@@ -850,7 +1058,7 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     if (next_image) {
       context.ws.send([
         'eval',
-        `label_image.onload = () => initAnnotationImage(label_image)`,
+        `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }`,
       ])
     }
 
@@ -879,6 +1087,11 @@ let routes = {
   '/annotate-image/image': ajaxRoute({
     description: 'get next image to be annotated',
     api: getNextImage,
+  }),
+  // Route for AI prediction of the current image via AJAX
+  '/annotate-image/predict': ajaxRoute({
+    description: 'predict how well the image matches the label with trained AI',
+    api: predictImage,
   }),
   // Route for submitting an image annotation via WebSocket
   '/annotate-image/submit': {
