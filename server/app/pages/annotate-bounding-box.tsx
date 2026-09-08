@@ -527,7 +527,20 @@ async function setupEditorUI() {
       }
     }
   }
-  
+
+  // Detect whether the image (or label) changed since the last setup. Only
+  // reset the camera when switching to a different image/label; when
+  // refreshing the same image (e.g. after adding/updating/deleting a
+  // bounding box) the current camera view is preserved below, so the user
+  // is not jumped back to the first bounding box after every add.
+  let setup_key = image_id + ':' + label_id
+  let imageChanged = window._lastSetupKey !== setup_key
+  window._lastSetupKey = setup_key
+
+  // Preserve the current camera when refreshing the same image so the user
+  // keeps their zoom/pan position (e.g. while adding multiple boxes).
+  let savedCamera = !imageChanged && window.camera ? { ...window.camera } : null
+
   setupDragUI({
     image: label_image,
     minimap_canvas: minimapCanvas,
@@ -539,11 +552,28 @@ async function setupEditorUI() {
     debugEndMessage: debugEndMessage,
 
     bounding_boxes: bounding_boxes,
-    resetCamera: true,
+    resetCamera: imageChanged,
   })
-  
-  // Camera reset is now handled in setupDragUI with resetCamera: true
-  console.log('setupEditorUI: Camera reset handled by setupDragUI')
+
+  if (savedCamera) {
+    // Restore the camera in-place: Object.assign keeps the same object
+    // identity that drag-ui's event listeners captured in their closure.
+    Object.assign(window.camera, savedCamera)
+    window.selectedBoundingBoxId = undefined
+    // Recompute the preview canvas from the restored camera without locking
+    // back onto a bounding box (resizeCanvas defaults to lockToBox: true,
+    // which would snap the camera to the first box again).
+    if (typeof window.resizePreviewToCamera === 'function') {
+      window.resizePreviewToCamera()
+    } else if (typeof window.render === 'function') {
+      window.render()
+    }
+  }
+
+  // Camera reset only happens when the image/label changed
+  // (resetCamera: imageChanged); same-image refreshes restore the saved
+  // camera above instead.
+  console.log('setupEditorUI: setupDragUI done, imageChanged:', imageChanged)
   
   // Set up periodic update of delete button state
   if (!window._deleteButtonUpdateInterval) {
