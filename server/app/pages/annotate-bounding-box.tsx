@@ -199,6 +199,13 @@ ion-popover.select-popover ion-radio-group ion-item ion-label {
   object-fit: contain;
 }
 
+/* Disable browser-native touch gestures (page scroll / pinch-zoom of the
+   page) on the preview canvas so two-finger pinch is always handled by the
+   drag-ui touch handlers instead of being hijacked by the browser. */
+#previewCanvas {
+  touch-action: none;
+}
+
 /* Button rows: use a smaller gap on small screens so all buttons stay visible */
 .bbox-button-row {
   display: flex;

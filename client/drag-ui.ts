@@ -247,6 +247,14 @@ function setupDragUI(options: {
   // zooming in fitBoundingBox mode so the canvas keeps matching the camera
   // view's aspect ratio instead of staying locked to the box size.
   function resizePreviewToCamera() {
+    // Clamp the camera position before computing the view. Zoom buttons
+    // (zoomInImage/zoomOutImage) change camera.width/height without clamping
+    // camera.x/y, so a view that was panned near the image edge could show
+    // blank space outside the image. The lockToBox path is excluded: it snaps
+    // the camera to a box which may legitimately sit at the image edge.
+    if (camera) {
+      clampCamera()
+    }
     resizeCanvas({ lockToBox: false })
   }
 
@@ -367,7 +375,23 @@ function setupDragUI(options: {
         let scaleX = Math.abs(currentDx) / Math.abs(lastDx)
         let scaleY = Math.abs(currentDy) / Math.abs(lastDy)
 
-        if (distanceX / distanceY > 2) {
+        // Guard against division by zero / NaN / Infinity. When both fingers
+        // share the same x (pure vertical pinch) currentDx is 0, making
+        // scaleX = 0 -> newWidth = Infinity -> camera.width jumps to 1.
+        // When lastDx is also 0 the ratio is NaN and all comparisons below
+        // silently fail. Treat any non-finite or non-positive scale as 1.
+        if (!isFinite(scaleX) || scaleX <= 0) scaleX = 1
+        if (!isFinite(scaleY) || scaleY <= 0) scaleY = 1
+
+        // Degenerate axis cases must be handled before the axis-dominance
+        // check below, otherwise distanceX/distanceY is 0/0 = NaN.
+        if (distanceX === 0) {
+          // Pure vertical pinch: only height should change
+          scaleX = 1
+        } else if (distanceY === 0) {
+          // Pure horizontal pinch: only width should change
+          scaleY = 1
+        } else if (distanceX / distanceY > 2) {
           scaleY = 1
         } else if (distanceY / distanceX > 2) {
           scaleX = 1
@@ -380,45 +404,35 @@ function setupDragUI(options: {
         if (newWidth > 1) newWidth = 1
         if (newHeight > 1) newHeight = 1
 
-        let width = newWidth * image.naturalWidth
-        let height = newHeight * image.naturalHeight
-        if (width < 1) {
-          width = 1
-          newWidth = 1 / image.naturalWidth
-        }
-        if (height < 1) {
-          height = 1
-          newHeight = 1 / image.naturalHeight
-        }
-
-        let centerX = camera.x * image.naturalWidth
-        let centerY = camera.y * image.naturalHeight
-
-        let left = centerX - width / 2
-        let top = centerY - height / 2
-        let right = left + width
-        let bottom = top + height
-
         // Allow zooming in (viewport smaller = more magnified)
         // Max zoom is 2.0x (viewport = 50% of image)
         let maxSize = 2.0
-        if (newWidth <= maxSize) {
-          if (left >= 0 && right <= image.naturalWidth) {
-            camera.width = newWidth
-          } else if (newWidth <= 1) {
-            camera.width = newWidth
-            camera.x -= (newWidth - camera.width) / 2
-          }
+        if (newWidth < 1 / image.naturalWidth) {
+          newWidth = 1 / image.naturalWidth
         }
+        if (newHeight < 1 / image.naturalHeight) {
+          newHeight = 1 / image.naturalHeight
+        }
+        if (newWidth > maxSize) newWidth = maxSize
+        if (newHeight > maxSize) newHeight = maxSize
 
-        if (newHeight <= maxSize) {
-          if (top >= 0 && bottom <= image.naturalHeight) {
-            camera.height = newHeight
-          } else if (newHeight <= 1) {
-            camera.height = newHeight
-            camera.y -= (newHeight - camera.height) / 2
-          }
-        }
+        // Apply-then-clamp: remember the old size so the center compensation
+        // below uses the real delta. The previous code assigned
+        // camera.width = newWidth BEFORE computing (newWidth - camera.width),
+        // so the compensation was always 0 (dead code).
+        let oldWidth = camera.width
+        let oldHeight = camera.height
+
+        camera.width = newWidth
+        camera.height = newHeight
+
+        // Keep the pinch center stable: when the view grows, shift the center
+        // back by half the growth so the zoomed-out area is split evenly on
+        // both sides. clampCamera() below then pulls the view back inside the
+        // image bounds, replacing the old "only apply if fully inside" gate
+        // which made pinch stop working near the image edges.
+        camera.x -= (newWidth - oldWidth) / 2
+        camera.y -= (newHeight - oldHeight) / 2
 
         // Clamp camera position so image always fills the canvas
         clampCamera()
@@ -474,7 +488,16 @@ function setupDragUI(options: {
         lastTouches[touch.identifier] = touch
       }
 
-      render()
+      // In fitBoundingBox mode the preview canvas pixel size must keep
+      // matching the camera view's aspect ratio. A two-finger pinch changes
+      // camera.width/height, so recompute the canvas size (resizeCanvas
+      // renders internally). A single-finger pan does not change the aspect
+      // ratio, so a plain render() is enough there.
+      if (touchCount >= 2 && window._canvasMode === 'fitBoundingBox') {
+        resizePreviewToCamera()
+      } else {
+        render()
+      }
     })
 
     cameraCanvas.addEventListener('touchend', event => {
