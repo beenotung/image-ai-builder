@@ -122,27 +122,17 @@ function showImage(){
   })
 }
 
-// Submits an image annotation and updates the UI with new count
-function submitAnnotation(answer) {
-  let image = document.getElementById('label_image')
-  let image_id = image.dataset.imageId
-  let rotation = image.dataset.rotation || 0
-  emit('/annotate-image/submit', {
-    label: document.getElementById('label_select').value,
-    image: image_id,
-    answer,
-    rotation,
-    project_id: getProjectId(),
-  });
-}
-
 // AI Assist: asks the trained AI model how well the current image matches the
 // selected label, then shows an inline badge over the image with the match
 // percentage and a suggested answer (YES/NO). Skipped silently when the label
 // has no trained model yet.
-let lastAskedKey = null
-let aiSuggestYes = null // true = suggest YES, false = suggest NO, null = none
-let predictSeq = 0 // increments per request; discards stale predict responses
+// NOTE: use var (not let/const) for top-level bindings — the framework
+// re-executes page scripts on every ws update (mount / SPA navigation),
+// and re-declaring let/const in the global scope throws
+// "Identifier ... has already been declared", aborting the whole script.
+var lastAskedKey = null
+var aiSuggestYes = null // true = suggest YES, false = suggest NO, null = none
+var predictSeq = 0 // increments per request; discards stale predict responses
 
 function isAIAssistEnabled() {
   return localStorage.getItem('ai_assist_enabled') !== '0'
@@ -373,9 +363,15 @@ function getProjectId() {
 // (Ionic's built-in keyboard navigation), Space/Enter picks, Esc closes.
 // Long-press detection: a single press fires once immediately.
 // If the key is held for 1 second, it starts repeating continuously.
-const LONG_PRESS_MS = 1000
-const keyPressStart = {}
+// var (not const) — see the note above about script re-execution
+var LONG_PRESS_MS = 1000
+var keyPressStart = {}
 
+// Guard: the page script re-executes on every ws update (mount / SPA
+// navigation); without this guard each execution would register another
+// keydown listener and every shortcut would fire multiple times.
+if (!window.__annotateImageKeysBound) {
+  window.__annotateImageKeysBound = true
 document.addEventListener('keydown', function(event) {
   const target = event.target
   const tag = target && target.tagName ? target.tagName.toLowerCase() : ''
@@ -463,6 +459,7 @@ document.addEventListener('keydown', function(event) {
 document.addEventListener('keyup', function(event) {
   delete keyPressStart[event.key]
 })
+}
 `)
 
 let page = (
