@@ -142,6 +142,7 @@ function submitAnnotation(answer) {
 // has no trained model yet.
 let lastAskedKey = null
 let aiSuggestYes = null // true = suggest YES, false = suggest NO, null = none
+let predictSeq = 0 // increments per request; discards stale predict responses
 
 function isAIAssistEnabled() {
   return localStorage.getItem('ai_assist_enabled') !== '0'
@@ -156,12 +157,16 @@ async function askAISuggestion() {
   // the image via dataURL and fires onload again) — keep the current badge
   let askedKey = label_id + ':' + image_id
   if (askedKey === lastAskedKey) return
-  lastAskedKey = askedKey
 
   // new image -> clear the previous suggestion badge & border
+  // (clearAISuggestion resets lastAskedKey so the same image can be
+  // re-asked later, e.g. when undo returns to a suggested image —
+  // so set the dedup key AFTER the clear, not before)
   clearAISuggestion()
+  lastAskedKey = askedKey
   if (!image_id || !label_id) return
 
+  let seq = ++predictSeq
   let res = await fetch_json(
     '/annotate-image/predict?label=' + label_id +
     '&image=' + image_id +
@@ -169,6 +174,10 @@ async function askAISuggestion() {
     { title: 'askAISuggestion' }
   )
   if (!res || res.probability == null) return // no trained model yet
+  // a newer image/label is showing (quick submit/undo while predicting)
+  if (seq !== predictSeq) return
+  let current = document.getElementById('label_image')
+  if (!current || current.dataset.imageId !== image_id) return
 
   let percent = Math.round(res.probability * 100)
   showAISuggestion(percent, percent >= 50)
@@ -196,6 +205,9 @@ function showAISuggestion(percent, suggest_yes) {
 // Hides the AI suggestion badge and removes the image border color
 function clearAISuggestion() {
   aiSuggestYes = null
+  // reset the dedup key so the same image can be re-asked later
+  // (e.g. undo returns to an image that already had a suggestion)
+  lastAskedKey = null
   let badge = document.getElementById('ai_suggest_badge')
   if (badge) {
     badge.classList.remove('show', 'suggest-yes', 'suggest-no')
