@@ -366,7 +366,7 @@ function BoxStatsTable(attrs: {
 let routes = {
   '/stats': {
     title: <ProjectPageTitle t={pageTitle} />,
-    description: 'TODO',
+    description: 'View annotation and bounding box statistics for the project',
     node: page,
   },
 } satisfies Routes

@@ -710,20 +710,20 @@ let routes = {
       let t = evalLocale(pageTitle, context)
       return {
         title: title(t),
-        description: 'TODO',
+        description: 'Review bounding boxes annotated by users on images',
         node: page,
       }
     },
   },
   '/review-bounding-box/submit-box-count': {
     title: apiEndpointTitle,
-    description: 'TODO',
+    description: 'load images for review by label and box count',
     node: <SubmitReviewBoundingBox />,
     streaming: false,
   },
   '/review-bounding-box/label-changed': {
     title: apiEndpointTitle,
-    description: 'TODO',
+    description: 'refresh box count options when the selected label changes',
     node: <LabelChanged />,
     streaming: false,
   },

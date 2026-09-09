@@ -1205,7 +1205,8 @@ let routes = {
   // Route for rendering the main annotation page
   '/annotate-image': {
     title: <ProjectPageTitle t={pageTitle} />,
-    description: 'TODO',
+    description:
+      'Annotate images with yes/no answers for a selected class label',
     node: page,
   },
   // Route for fetching the next image to annotate via AJAX

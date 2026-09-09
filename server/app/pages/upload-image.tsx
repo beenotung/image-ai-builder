@@ -825,7 +825,7 @@ async function RemoveAllImages(context: ExpressContext) {
 let routes = {
   '/upload-image': {
     title: <ProjectPageTitle t={pageTitle} />,
-    description: 'TODO',
+    description: 'Upload images to the project and manage uploaded images',
     node: page,
   },
   '/upload-image/submit': ajaxRoute({
