@@ -476,18 +476,22 @@ function getProjectId() {
 }
 
 // ---------- shared state ----------
-let imagesData = [];
-let filteredImagesData = [];
-let isLabelVisible = false;
-let isBoundingBoxVisible = false;
-let bboxCountFilters = []; // empty = all, [1,2,3...] = specific counts
-let labelStates = [];
-let isToggling = false;
-let isSelectionMode = false;
-let selectedImages = [];
-let isUpdatingAnnotation = false;
-let selectedLabels = [];
-let organizeByLabel = false;
+// NOTE: use var (not let/const) for top-level bindings — the framework
+// re-executes page scripts on every ws update (mount / SPA navigation),
+// and re-declaring let/const in the global scope throws
+// "Identifier ... has already been declared", aborting the whole script.
+var imagesData = [];
+var filteredImagesData = [];
+var isLabelVisible = false;
+var isBoundingBoxVisible = false;
+var bboxCountFilters = []; // empty = all, [1,2,3...] = specific counts
+var labelStates = [];
+var isToggling = false;
+var isSelectionMode = false;
+var selectedImages = [];
+var isUpdatingAnnotation = false;
+var selectedLabels = [];
+var organizeByLabel = false;
 
 function initLabelStates(labels) {
   labels.forEach(label => {
@@ -654,6 +658,10 @@ function applyBboxCountFilter() {
 }
 window.applyBboxCountFilter = applyBboxCountFilter;
 
+// Guard: the page script re-executes on every ws update; without this guard
+// each execution would register another click listener.
+if (!window.__manageDatasetClickBound) {
+  window.__manageDatasetClickBound = true
 document.addEventListener('click', function(e) {
   var dd = document.getElementById('bbox-count-dropdown');
   var btn = document.getElementById('bbox-count-button');
@@ -661,6 +669,7 @@ document.addEventListener('click', function(e) {
     dd.style.display = 'none';
   }
 });
+}
 
 function toggleLabelState(label_id) {
   if (isToggling) return;
@@ -979,6 +988,10 @@ function drawBoxesWhenLoaded(image) {
   }
 }
 
+// Guard: the page script re-executes on every ws update; without this guard
+// each execution would register another resize listener.
+if (!window.__manageDatasetResizeBound) {
+  window.__manageDatasetResizeBound = true
 window.addEventListener('resize', function() {
   document.querySelectorAll('.image-item img[data-boxes]').forEach(function(img) {
     if (img.dataset.boxes && img.dataset.boxes !== '[]') {
@@ -990,6 +1003,7 @@ window.addEventListener('resize', function() {
     drawBoundingBoxes(enlarged);
   }
 });
+}
 
 function updateButtonStates() {
   const img = document.getElementById('enlargedImage');
