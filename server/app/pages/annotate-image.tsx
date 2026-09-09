@@ -242,13 +242,11 @@ function initAIAssistToggle() {
   toggle.checked = isAIAssistEnabled()
 }
 
-label_select.addEventListener('ionChange', function(event) {
-  console.log('label_select changed ', label_select.value)
-  emit('/annotate-image/showImage', {
-    label_id: label_select.value,
-    project_id: getProjectId(),
-  })
-})
+// NOTE: the label_select ionChange handler is registered ONCE via event
+// delegation on document (see the guarded block below). Do NOT attach it to
+// the element itself — SPA navigation re-creates #label_select, and an
+// element-level listener would be lost with the old element, breaking label
+// switching after navigating away and back.
 
 // Sends undo annotation request
 function undoAnnotation() {
@@ -309,25 +307,40 @@ window.onServerMessage = window.onServerMessage || function(message) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Init on first load AND after SPA navigation: DOMContentLoaded does not
+// fire again on SPA navigation, so check readyState instead
+// (same pattern as annotate-bounding-box.tsx initPage).
+function initPage() {
   initAIAssistToggle()
-  const labelSelect = document.getElementById('label_select');
-  if (!labelSelect) {
-    console.error('label_select not found');
-    return;
-  }
-  labelSelect.addEventListener('ionChange', function(event) {
-    const labelId = labelSelect.value;
-    console.log('label_select changed ', labelId);
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPage)
+} else {
+  initPage()
+}
+
+// Label switch via event delegation on document: the listener survives DOM
+// replacement (SPA navigation re-creates #label_select). The guard prevents
+// double registration in case the script re-executes.
+if (!window.__annotateImageBound) {
+  window.__annotateImageBound = true
+  document.addEventListener('ionChange', function(event) {
+    let target = event.target
+    if (!target || target.id !== 'label_select') return
+    let labelId = target.value
+    console.log('label_select changed ', labelId)
     if (!labelId) {
-      console.error('No label_id selected');
-      return;
+      console.error('No label_id selected')
+      return
     }
-    emit('/annotate-image/showImage', { label_id: labelId, project_id: getProjectId() });
+    emit('/annotate-image/showImage', {
+      label_id: labelId,
+      project_id: getProjectId(),
+    })
     // blur so keyboard shortcuts (e.g. Space) work right after selecting
-    labelSelect.blur?.()
-  });
-})
+    target.blur?.()
+  })
+}
 
 // Helper function to get project_id from URL params
 function getProjectId() {
@@ -849,7 +862,11 @@ function ShowImage(attrs: {}, context: WsContext) {
     if (next_image) {
       context.ws.send([
         'eval',
-        `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }`,
+        `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }
+         // the load event may have fired before this eval ran (cached image)
+         // or the src may be unchanged (same next image for the new label) —
+         // trigger the AI suggestion now so the badge matches the new label
+         if (label_image.complete && label_image.naturalWidth) askAISuggestion()`,
       ])
     }
 
@@ -981,7 +998,11 @@ function UndoAnnotation(attrs: {}, context: WsContext) {
     // Set up client-side image rotation on load
     context.ws.send([
       'eval',
-      `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }`,
+      `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }
+       // the load event may have fired before this eval ran (cached image)
+       // or the src may be unchanged (same next image for the new label) —
+       // trigger the AI suggestion now so the badge matches the new label
+       if (label_image.complete && label_image.naturalWidth) askAISuggestion()`,
     ])
 
     // Terminate execution to prevent further processing
@@ -1122,7 +1143,11 @@ function SubmitAnnotation(attrs: {}, context: WsContext) {
     if (next_image) {
       context.ws.send([
         'eval',
-        `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }`,
+        `label_image.onload = () => { initAnnotationImage(label_image); askAISuggestion() }
+         // the load event may have fired before this eval ran (cached image)
+         // or the src may be unchanged (same next image for the new label) —
+         // trigger the AI suggestion now so the badge matches the new label
+         if (label_image.complete && label_image.naturalWidth) askAISuggestion()`,
       ])
     }
 
