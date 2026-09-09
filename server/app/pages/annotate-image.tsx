@@ -51,28 +51,58 @@ let style = Style(/* css */ `
   margin: 0;
   height: 4rem;
 }
-/* AI suggestion dialog: smaller popup & title, image thumbnail as icon */
-.swal2-container .ai-suggest-popup {
-  width: auto;
-  min-width: 20em;
+/* AI suggestion: inline badge over the image + colored border */
+#image_wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
 }
-.swal2-container .ai-suggest-title {
-  font-size: 1.1em;
+#ai_suggest_badge {
+  display: none;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 10;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 0.5rem;
+  color: #fff;
+  font-size: 0.9rem;
+  white-space: nowrap;
 }
-.swal2-container .ai-suggest-icon {
-  width: 10em !important;
-  height: 10em !important;
-  margin: 1em auto 0.6em !important;
-  border: none !important;
-  border-radius: 0.5em !important;
-  zoom: 1 !important;
+#ai_suggest_badge.show {
+  display: flex;
 }
-.swal2-container .ai-suggest-thumbnail {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 0.5em;
+#ai_suggest_badge.suggest-yes {
+  box-shadow: inset 3px 0 0 #28a745;
+}
+#ai_suggest_badge.suggest-no {
+  box-shadow: inset 3px 0 0 #dc3545;
+}
+#ai_suggest_badge button {
+  border: none;
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  background: #6e7881;
+  color: #fff;
+}
+#ai_suggest_badge.suggest-yes button.yes {
+  background: #28a745;
+}
+#ai_suggest_badge.suggest-no button.no {
+  background: #dc3545;
+}
+#label_image.ai-border-yes {
+  outline: 4px solid #28a745;
+  outline-offset: 2px;
+}
+#label_image.ai-border-no {
+  outline: 4px solid #dc3545;
+  outline-offset: 2px;
 }
 `)
 
@@ -107,10 +137,11 @@ function submitAnnotation(answer) {
 }
 
 // AI Assist: asks the trained AI model how well the current image matches the
-// selected label, then suggests an answer in a confirm dialog.
-// Skipped silently when the label has no trained model yet.
-let aiAssistEnabled = localStorage.getItem('ai_assist_enabled') !== '0'
+// selected label, then shows an inline badge over the image with the match
+// percentage and a suggested answer (YES/NO). Skipped silently when the label
+// has no trained model yet.
 let lastAskedKey = null
+let aiSuggestYes = null // true = suggest YES, false = suggest NO, null = none
 
 function isAIAssistEnabled() {
   return localStorage.getItem('ai_assist_enabled') !== '0'
@@ -120,13 +151,16 @@ async function askAISuggestion() {
   if (!isAIAssistEnabled()) return
   let image = document.getElementById('label_image')
   let image_id = image.dataset.imageId
-  if (!image_id) return
   let label_id = document.getElementById('label_select').value
-  if (!label_id) return
-  // avoid asking repeatedly for the same image & label
+  // avoid asking repeatedly for the same image & label (e.g. rotation reloads
+  // the image via dataURL and fires onload again) — keep the current badge
   let askedKey = label_id + ':' + image_id
   if (askedKey === lastAskedKey) return
   lastAskedKey = askedKey
+
+  // new image -> clear the previous suggestion badge & border
+  clearAISuggestion()
+  if (!image_id || !label_id) return
 
   let res = await fetch_json(
     '/annotate-image/predict?label=' + label_id +
@@ -137,50 +171,68 @@ async function askAISuggestion() {
   if (!res || res.probability == null) return // no trained model yet
 
   let percent = Math.round(res.probability * 100)
+  showAISuggestion(percent, percent >= 50)
+}
+
+// Shows the AI suggestion badge over the image and colors the image border
+function showAISuggestion(percent, suggest_yes) {
+  let badge = document.getElementById('ai_suggest_badge')
+  let text = document.getElementById('ai_suggest_text')
+  let image = document.getElementById('label_image')
+  if (!badge || !text || !image) return
   let texts = window.aiTexts || {}
-  let suggest_yes = percent >= 50
-  // Show the current image as the dialog icon (instead of the question mark)
-  let image_src = image.src
-  let result = await Swal.fire({
-    title: (texts.title || '').replace('{percent}', percent),
-    text: suggest_yes ? texts.suggest_yes : texts.suggest_no,
-    icon: 'question',
-    iconHtml: image_src
-      ? '<img class="ai-suggest-thumbnail" src="' + image_src + '">'
-      : undefined,
-    customClass: {
-      popup: 'ai-suggest-popup',
-      title: 'ai-suggest-title',
-      icon: 'ai-suggest-icon',
-    },
-    // Disable the built-in icon spin/flip animation (it rotates the thumbnail).
-    // prepareParams() merges our showClass with the defaults, which include
-    // icon: 'swal2-icon-show' — so we must explicitly override icon to '' to
-    // stop the swal2-animate-question-mark / swal2-animate-error-icon CSS
-    // animations from running.
-    showClass: {
-      popup: 'swal2-show',
-      backdrop: 'swal2-backdrop-show',
-      icon: '',
-    },
-    showConfirmButton: true,
-    showCancelButton: true,
-    confirmButtonText: texts.yes,
-    cancelButtonText: texts.no,
-    // Highlight the suggested answer; the other button stays neutral gray
-    // (SweetAlert2's default confirm color is purple, so set both explicitly)
-    confirmButtonColor: suggest_yes ? '#28a745' : '#6e7881',
-    cancelButtonColor: suggest_yes ? '#6e7881' : '#dc3545',
-    // Focus the suggested answer so Space accepts the AI suggestion directly
-    focusCancel: !suggest_yes,
-    heightAuto: false,
-  })
-  if (result.isConfirmed) {
-    submitAnnotation(1)
-  } else if (result.dismiss === 'cancel') {
-    submitAnnotation(0)
+  aiSuggestYes = suggest_yes
+  text.textContent =
+    (texts.badge || 'AI {percent}%').replace('{percent}', percent) +
+    ' · ' +
+    (suggest_yes ? texts.suggest_yes : texts.suggest_no)
+  badge.classList.add('show')
+  badge.classList.toggle('suggest-yes', suggest_yes)
+  badge.classList.toggle('suggest-no', !suggest_yes)
+  image.classList.remove('ai-border-yes', 'ai-border-no')
+  image.classList.add(suggest_yes ? 'ai-border-yes' : 'ai-border-no')
+}
+
+// Hides the AI suggestion badge and removes the image border color
+function clearAISuggestion() {
+  aiSuggestYes = null
+  let badge = document.getElementById('ai_suggest_badge')
+  if (badge) {
+    badge.classList.remove('show', 'suggest-yes', 'suggest-no')
   }
-  // other dismissals (Esc / outside click / close button) -> no annotation
+  let text = document.getElementById('ai_suggest_text')
+  if (text) {
+    text.textContent = ''
+  }
+  let image = document.getElementById('label_image')
+  if (image) {
+    image.classList.remove('ai-border-yes', 'ai-border-no')
+  }
+}
+
+// Submits an image annotation and updates the UI with new count
+function submitAnnotation(answer) {
+  clearAISuggestion()
+  let image = document.getElementById('label_image')
+  let image_id = image.dataset.imageId
+  let rotation = image.dataset.rotation || 0
+  emit('/annotate-image/submit', {
+    label: document.getElementById('label_select').value,
+    image: image_id,
+    answer,
+    rotation,
+    project_id: getProjectId(),
+  });
+}
+
+function toggleAIAssist(event) {
+  let enabled = event.target.checked
+  localStorage.setItem('ai_assist_enabled', enabled ? '1' : '0')
+  if (!enabled) {
+    clearAISuggestion()
+  }
+  // blur so keyboard shortcuts (e.g. Space) work right after clicking
+  event.target.blur()
 }
 
 // Syncs the AI assist toggle UI with the stored state
@@ -188,12 +240,6 @@ function initAIAssistToggle() {
   let toggle = document.getElementById('ai_assist_toggle')
   if (!toggle) return
   toggle.checked = isAIAssistEnabled()
-}
-
-function toggleAIAssist(event) {
-  let enabled = event.target.checked
-  localStorage.setItem('ai_assist_enabled', enabled ? '1' : '0')
-  aiAssistEnabled = enabled
 }
 
 label_select.addEventListener('ionChange', function(event) {
@@ -278,6 +324,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     emit('/annotate-image/showImage', { label_id: labelId, project_id: getProjectId() });
+    // blur so keyboard shortcuts (e.g. Space) work right after selecting
+    labelSelect.blur?.()
   });
 })
 
@@ -288,13 +336,11 @@ function getProjectId() {
 }
 
 // Keyboard shortcuts for annotating images:
+//   Space      -> accept the AI suggestion (annotate as suggested)
 //   ArrowLeft  -> annotate as NO  (reject)
 //   ArrowRight -> annotate as YES (agree)
 //   ArrowUp    -> undo last annotation
-// When the AI suggestion dialog is open, its own keyboard handling takes over:
-//   Space/Enter -> activate the focused button (是/否)
-//   ArrowLeft/ArrowRight -> move focus between 是/否
-//   Esc -> skip (no annotation)
+//   Esc        -> dismiss the AI suggestion (no annotation)
 // Long-press detection: a single press fires once immediately.
 // If the key is held for 1 second, it starts repeating continuously.
 const LONG_PRESS_MS = 1000
@@ -312,13 +358,21 @@ document.addEventListener('keydown', function(event) {
     (target && target.isContentEditable)
   if (isEditable) return
 
-  // While the AI suggestion dialog is open, skip the annotation shortcuts
-  // (the dialog handles its own keys: Space/Enter confirm, arrows switch focus)
-  if (document.body.classList.contains('swal2-shown')) {
+  const key = event.key
+
+  // Space accepts the AI suggestion (when one is showing)
+  if (key === ' ' && aiSuggestYes !== null) {
+    event.preventDefault()
+    submitAnnotation(aiSuggestYes ? 1 : 0)
     return
   }
 
-  const key = event.key
+  // Esc dismisses the AI suggestion without annotating
+  if (key === 'Escape' && aiSuggestYes !== null) {
+    clearAISuggestion()
+    return
+  }
+
   const isArrow = key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp'
   if (!isArrow) return
 
@@ -380,28 +434,22 @@ let page = (
   </>
 )
 
-// Injects localized texts for the AI suggestion dialog (used by the client
+// Injects localized texts for the AI suggestion badge (used by the client
 // script below, which is a static string and cannot use Locale directly)
 function AIScript(attrs: {}, context: DynamicContext) {
   let texts = {
-    title: Locale(
-      {
-        en: 'AI thinks this image is {percent}% likely to have this label',
-        zh_hk: 'AI 認為此圖片有 {percent}% 屬於此標籤',
-        zh_cn: 'AI 认为此图像有 {percent}% 属于此标签',
-      },
+    badge: Locale(
+      { en: 'AI {percent}%', zh_hk: 'AI {percent}%', zh_cn: 'AI {percent}%' },
       context,
     ),
     suggest_yes: Locale(
-      { en: 'AI suggests: YES', zh_hk: 'AI 建議：是', zh_cn: 'AI 建议：是' },
+      { en: 'Suggest: YES', zh_hk: '建議：是', zh_cn: '建议：是' },
       context,
     ),
     suggest_no: Locale(
-      { en: 'AI suggests: NO', zh_hk: 'AI 建議：否', zh_cn: 'AI 建议：否' },
+      { en: 'Suggest: NO', zh_hk: '建議：否', zh_cn: '建议：否' },
       context,
     ),
-    yes: Locale({ en: 'Yes', zh_hk: '是', zh_cn: '是' }, context),
-    no: Locale({ en: 'No', zh_hk: '否', zh_cn: '否' }, context),
   }
   return <script>aiTexts = {JSON.stringify(texts)}</script>
 }
@@ -490,24 +538,40 @@ function Main(attrs: {}, context: DynamicContext) {
             <Locale en="AI Assist" zh_hk="AI 協助" zh_cn="AI 协助" />
           </ion-toggle>
         </ion-item>
-        <div style="flex-grow: 1; overflow: hidden">
-          <img
-            data-image-id={image?.id}
-            data-rotation={image?.rotation || 0}
-            id="label_image"
-            src={image ? `/uploads/${image.filename}` : ''}
-            alt={
-              <Locale
-                en="Loading image..."
-                zh_hk="載入圖片中..."
-                zh_cn="加载图像中..."
-              />
-            }
-            style="max-height: 60vh; max-width: 100%; width: auto; height: auto; object-fit: contain;"
-            onclick="rotateAnnotationImage(this)"
-            onload="initAnnotationImage(this); if (window.askAISuggestion) askAISuggestion()"
-            hidden={!image}
-          />
+        {/* padding gives room for the AI suggestion outline (6px) around the
+            image, otherwise overflow:hidden clips it (e.g. behind the toggle) */}
+        <div style="flex-grow: 1; overflow: hidden; padding: 0.5rem">
+          <span
+            id="image_wrapper"
+            style="position: relative; display: inline-block; max-width: 100%;"
+          >
+            <img
+              data-image-id={image?.id}
+              data-rotation={image?.rotation || 0}
+              id="label_image"
+              src={image ? `/uploads/${image.filename}` : ''}
+              alt={
+                <Locale
+                  en="Loading image..."
+                  zh_hk="載入圖片中..."
+                  zh_cn="加载图像中..."
+                />
+              }
+              style="max-height: 60vh; max-width: 100%; width: auto; height: auto; object-fit: contain;"
+              onclick="rotateAnnotationImage(this)"
+              onload="initAnnotationImage(this); if (window.askAISuggestion) askAISuggestion()"
+              hidden={!image}
+            />
+            <div id="ai_suggest_badge">
+              <span id="ai_suggest_text"></span>
+              <button type="button" class="yes" onclick="submitAnnotation(1)">
+                <Locale en="Yes" zh_hk="是" zh_cn="是" />
+              </button>
+              <button type="button" class="no" onclick="submitAnnotation(0)">
+                <Locale en="No" zh_hk="否" zh_cn="否" />
+              </button>
+            </div>
+          </span>
           <div
             id="no-image-message"
             style="display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 2rem;"
