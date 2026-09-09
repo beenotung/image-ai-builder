@@ -354,15 +354,51 @@ function getProjectId() {
 //   ArrowRight -> annotate as YES (agree)
 //   ArrowUp    -> undo last annotation
 //   Esc        -> dismiss the AI suggestion (no annotation)
+// Space never opens the label select (it conflicts with the shortcut above)
+// — open the select with a mouse click or Enter instead.
+// When the label select overlay (alert/popover) is open, the image shortcuts
+// above are disabled — the arrow keys control the label options instead
+// (Ionic's built-in keyboard navigation), Space/Enter picks, Esc closes.
 // Long-press detection: a single press fires once immediately.
 // If the key is held for 1 second, it starts repeating continuously.
 const LONG_PRESS_MS = 1000
 const keyPressStart = {}
 
 document.addEventListener('keydown', function(event) {
-  // Ignore shortcuts when typing in an input/select/textarea or contentEditable
   const target = event.target
   const tag = target && target.tagName ? target.tagName.toLowerCase() : ''
+  const key = event.key
+
+  // While the label select overlay is open, skip the image annotation
+  // shortcuts (undo/yes/no) so the arrow keys control the label options
+  // via Ionic's own keyboard navigation instead.
+  if (
+    document.querySelector(
+      'ion-alert, ion-popover, ion-modal, ion-action-sheet, ion-select-popover',
+    )
+  ) {
+    return
+  }
+
+  // Space accepts the AI suggestion (when one is showing). Also block the
+  // browser default of opening the focused label select with Space — it
+  // conflicts with this shortcut (open the select by mouse click or Enter).
+  // Text inputs still type spaces normally.
+  if (key === ' ') {
+    const isTextEntry =
+      tag === 'input' ||
+      tag === 'textarea' ||
+      (target && target.isContentEditable)
+    if (!isTextEntry) {
+      event.preventDefault()
+      if (!event.repeat && aiSuggestYes !== null) {
+        submitAnnotation(aiSuggestYes ? 1 : 0)
+      }
+      return
+    }
+  }
+
+  // Ignore shortcuts when typing in an input/select/textarea or contentEditable
   const isEditable =
     tag === 'input' ||
     tag === 'textarea' ||
@@ -370,15 +406,6 @@ document.addEventListener('keydown', function(event) {
     tag === 'ion-select' ||
     (target && target.isContentEditable)
   if (isEditable) return
-
-  const key = event.key
-
-  // Space accepts the AI suggestion (when one is showing)
-  if (key === ' ' && aiSuggestYes !== null) {
-    event.preventDefault()
-    submitAnnotation(aiSuggestYes ? 1 : 0)
-    return
-  }
 
   // Esc dismisses the AI suggestion without annotating
   if (key === 'Escape' && aiSuggestYes !== null) {
