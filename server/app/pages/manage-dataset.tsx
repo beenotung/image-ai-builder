@@ -245,6 +245,19 @@ let style = Style(/* css */ `
 #ManageDataset .browse-toolbar ion-button.icon-only-mobile {
   --padding-start: 0.75rem;
 }
+/* right-side button group (Show BBox / Box Count / Show Labels):
+   kept as one unit so it wraps to the next row as a whole on narrow
+   screens instead of wrapping button-by-button */
+#ManageDataset .toolbar-right-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Box Count wrapper: hidden but space-reserved (visibility, not display)
+   so the toolbar buttons don't shift when BBox mode is toggled */
+#ManageDataset .bbox-count-wrapper {
+  visibility: hidden;
+}
 #label-toggle-container {
   z-index: 10;
 }
@@ -461,6 +474,12 @@ let style = Style(/* css */ `
   #ManageDataset .browse-toolbar ion-button.icon-only-mobile ion-icon {
     margin: 0;
   }
+  /* move the right-side group (Show BBox / Box Count / Show Labels) to its
+     own row, right-aligned, when the screen is too narrow */
+  #ManageDataset .toolbar-right-group {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
 }
 #labelStatus.loading {
   text-align: center;
@@ -532,9 +551,24 @@ function toggleBoundingBoxes() {
       span.textContent = isBoundingBoxVisible ? 'Hide BBox' : 'Show BBox';
     }
   }
+  // show/hide the Box Count button via its wrapper's visibility (not
+  // display) so the button keeps its place in the toolbar and the
+  // neighbouring buttons don't shift when BBox mode is toggled
+  var countWrapper = document.querySelector('.bbox-count-wrapper');
+  if (countWrapper) {
+    countWrapper.style.visibility = isBoundingBoxVisible ? 'visible' : 'hidden';
+  }
+  // sync the button label with the current filter state — the server-rendered
+  // initial text is just "Box Count" (no ": All"), so set it here as well,
+  // otherwise the first "Show BBox" shows a label without the ": All" suffix
   var countBtn = document.getElementById('bbox-count-button');
   if (countBtn) {
-    countBtn.style.display = isBoundingBoxVisible ? '' : 'none';
+    var span = countBtn.querySelector('span');
+    if (span) {
+      span.textContent = bboxCountFilters.length === 0
+        ? 'Box Count: All'
+        : 'Box Count: ' + bboxCountFilters.slice().sort(function(a,b){return a-b;}).join(', ');
+    }
   }
   if (!isBoundingBoxVisible) {
     var dd = document.getElementById('bbox-count-dropdown');
@@ -658,15 +692,39 @@ function applyBboxCountFilter() {
 }
 window.applyBboxCountFilter = applyBboxCountFilter;
 
+// Hides the label dropdown and syncs its toggle state (client-side close,
+// e.g. when the bbox count dropdown opens or the user clicks elsewhere)
+function closeLabelDropdown() {
+  var container = document.getElementById('label-toggle-container');
+  if (container) container.style.display = 'none';
+  if (isLabelVisible) {
+    isLabelVisible = false;
+    var btn = document.getElementById('toggle-labels-button');
+    if (btn) {
+      var span = btn.querySelector('span');
+      if (span) span.textContent = 'Show Labels';
+    }
+  }
+}
+
 // Guard: the page script re-executes on every ws update; without this guard
 // each execution would register another click listener.
 if (!window.__manageDatasetClickBound) {
   window.__manageDatasetClickBound = true
 document.addEventListener('click', function(e) {
+  // close the bbox count dropdown when clicking outside it and its button
   var dd = document.getElementById('bbox-count-dropdown');
   var btn = document.getElementById('bbox-count-button');
   if (dd && dd.style.display !== 'none' && btn && !btn.contains(e.target) && !dd.contains(e.target)) {
     dd.style.display = 'none';
+  }
+  // close the label dropdown when clicking outside it and its button —
+  // this makes the two dropdowns mutually exclusive (opening one closes
+  // the other), so they never overlap and block each other's items
+  var labelContainer = document.getElementById('label-toggle-container');
+  var labelBtn = document.getElementById('toggle-labels-button');
+  if (labelContainer && labelContainer.style.display !== 'none' && labelBtn && !labelBtn.contains(e.target) && !labelContainer.contains(e.target)) {
+    closeLabelDropdown();
   }
 });
 }
@@ -1791,86 +1849,95 @@ function Main(attrs: {}, context: DynamicContext) {
             onchange="importDataset(event)"
           />
           <div style="flex: 1;"></div>
-          <ion-button
-            id="toggle-bbox-button"
-            onclick="window.toggleBoundingBoxes()"
-          >
-            <span>
-              <Locale en="Show BBox" zh_hk="顯示框" zh_cn="显示框" />
-            </span>
-          </ion-button>
-          <div style="position: relative;">
+          <div class="toolbar-right-group">
             <ion-button
-              id="bbox-count-button"
-              style="display: none;"
-              onclick="window.toggleBboxCountDropdown()"
+              id="toggle-bbox-button"
+              onclick="window.toggleBoundingBoxes()"
             >
               <span>
-                <Locale en="Box Count" zh_hk="框數量" zh_cn="框数量" />
-              </span>
-              <ion-icon
-                name="chevron-down"
-                style="margin-left: 0.25rem; font-size: 0.8rem;"
-              ></ion-icon>
-            </ion-button>
-            <div
-              id="bbox-count-dropdown"
-              style="position: absolute; top: 100%; right: 0; margin-top: 0.25rem; display: none; flex-direction: column; gap: 0.25rem; z-index: 10;"
-            >
-              {mapArray(bboxCounts, n => (
-                <div class="label-container">
-                  <div class="class-label">{n}</div>
-                  <ion-button
-                    id={`bbox-count-state-${n}`}
-                    class="label-state-button"
-                    fill="clear"
-                    onclick={`window.setBboxCountFilter(${n})`}
-                  >
-                    <ion-icon
-                      name="ellipse-outline"
-                      style="--ionicon-stroke-width: 32px; color: #999;"
-                    ></ion-icon>
-                  </ion-button>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style="position: relative;">
-            <ion-button id="toggle-labels-button" onclick="toggleLabels()">
-              <span>
-                <Locale en="Show Labels" zh_hk="顯示標籤" zh_cn="显示标签" />
+                <Locale en="Show BBox" zh_hk="顯示框" zh_cn="显示框" />
               </span>
             </ion-button>
-            <div
-              id="label-toggle-container"
-              style="position: absolute; top: 100%; right: 0; margin-top: 0.25rem; display: none; flex-direction: column; gap: 0.25rem; z-index: 10;"
-            >
-              {mapArray(labels, label => {
-                let annotated_count = count_annotated_images.get({
-                  label_id: label.id!,
-                  project_id,
-                })
-                return (
+            <div class="bbox-count-wrapper" style="position: relative;">
+              <ion-button
+                id="bbox-count-button"
+                onclick="window.toggleBboxCountDropdown()"
+              >
+                <span>
+                  {/* initial text must match what toggleBoundingBoxes() sets
+                      ("Box Count: All"), otherwise the visibility:hidden
+                      wrapper reserves the wrong width and the first
+                      Show BBox click lays out with a stale size */}
+                  <Locale
+                    en="Box Count: All"
+                    zh_hk="框數量：全部"
+                    zh_cn="框数量：全部"
+                  />
+                </span>
+                <ion-icon
+                  name="chevron-down"
+                  style="margin-left: 0.25rem; font-size: 0.8rem;"
+                ></ion-icon>
+              </ion-button>
+              <div
+                id="bbox-count-dropdown"
+                style="position: absolute; top: 100%; right: 0; margin-top: 0.25rem; display: none; flex-direction: column; gap: 0.25rem; z-index: 10;"
+              >
+                {mapArray(bboxCounts, n => (
                   <div class="label-container">
-                    <div class="class-label">{label.title}</div>
+                    <div class="class-label">{n}</div>
                     <ion-button
-                      id={`label-state-button-${label.id}`}
-                      class="label-state-button empty"
+                      id={`bbox-count-state-${n}`}
+                      class="label-state-button"
                       fill="clear"
-                      onclick={`toggleLabelState(${label.id})`}
+                      onclick={`window.setBboxCountFilter(${n})`}
                     >
                       <ion-icon
                         name="ellipse-outline"
                         style="--ionicon-stroke-width: 32px; color: #999;"
                       ></ion-icon>
                     </ion-button>
-                    <progress
-                      value={annotated_count}
-                      max={totalImages || 1}
-                    ></progress>
                   </div>
-                )
-              })}
+                ))}
+              </div>
+            </div>
+            <div style="position: relative;">
+              <ion-button id="toggle-labels-button" onclick="toggleLabels()">
+                <span>
+                  <Locale en="Show Labels" zh_hk="顯示標籤" zh_cn="显示标签" />
+                </span>
+              </ion-button>
+              <div
+                id="label-toggle-container"
+                style="position: absolute; top: 100%; right: 0; margin-top: 0.25rem; display: none; flex-direction: column; gap: 0.25rem; z-index: 10;"
+              >
+                {mapArray(labels, label => {
+                  let annotated_count = count_annotated_images.get({
+                    label_id: label.id!,
+                    project_id,
+                  })
+                  return (
+                    <div class="label-container">
+                      <div class="class-label">{label.title}</div>
+                      <ion-button
+                        id={`label-state-button-${label.id}`}
+                        class="label-state-button empty"
+                        fill="clear"
+                        onclick={`toggleLabelState(${label.id})`}
+                      >
+                        <ion-icon
+                          name="ellipse-outline"
+                          style="--ionicon-stroke-width: 32px; color: #999;"
+                        ></ion-icon>
+                      </ion-button>
+                      <progress
+                        value={annotated_count}
+                        max={totalImages || 1}
+                      ></progress>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
