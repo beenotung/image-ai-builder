@@ -25,7 +25,6 @@ import { validateNickname, validateUsername } from '../validate/user.js'
 import { object, string } from 'cast.ts'
 import { MessageException } from '../../exception.js'
 import { Content, Page } from '../components/page.js'
-import { IonButton } from '../components/ion-button.js'
 import { Locale, Title } from '../components/locale.js'
 
 let pageTitle = <Locale en="Profile" zh_hk="帳戶" zh_cn="账户" />
@@ -307,24 +306,56 @@ async function previewAvatar(input) {
   input.files = list.files
   previewContainer.hidden = false
 }
+async function confirmLogout() {
+  let section = document.getElementById('logoutSection')
+  let d = section.dataset
+  let isConfirmed
+  if (typeof showConfirm === 'function') {
+    isConfirmed = await showConfirm({
+      title: d.confirmTitle,
+      text: d.confirmText,
+      icon: 'warning',
+      confirmButtonText: d.confirmButton,
+      cancelButtonText: d.cancelButton,
+    })
+  } else {
+    isConfirmed = confirm(d.confirmTitle)
+  }
+  if (isConfirmed) window.location.href = '/logout'
+}
 </script>
 ${toastPlugin.script}
 `)}
       </form>
       <hr style="margin-bottom: 2rem" />
-      {/* TODO make a popup confirm for logout */}
-      <Content
-        web={
-          <a href="/logout" rel="nofollow">
-            <Locale en="Logout" zh_hk="登出" zh_cn="登出" />
-          </a>
+      <div
+        id="logoutSection"
+        data-confirm-title={
+          <Locale en="Log out?" zh_hk="確定要登出嗎？" zh_cn="确定要登出吗？" />
         }
-        ionic={
-          <IonButton url="/logout" rel="nofollow" color="dark" expand="block">
-            <Locale en="Logout" zh_hk="登出" zh_cn="登出" />
-          </IonButton>
+        data-confirm-text={
+          <Locale
+            en="You will need to log in again to manage your account."
+            zh_hk="登出後需要重新登入才能管理您的帳戶。"
+            zh_cn="登出后需要重新登录才能管理您的账户。"
+          />
         }
-      ></Content>
+        data-confirm-button={<Locale en="Logout" zh_hk="登出" zh_cn="登出" />}
+        data-cancel-button={<Locale en="Cancel" zh_hk="取消" zh_cn="取消" />}
+      >
+        <Content
+          web={
+            <button onclick="confirmLogout()">
+              <Locale en="Logout" zh_hk="登出" zh_cn="登出" />
+            </button>
+          }
+          ionic={
+            <ion-button color="dark" expand="block" onclick="confirmLogout()">
+              <Locale en="Logout" zh_hk="登出" zh_cn="登出" />
+            </ion-button>
+          }
+        ></Content>
+      </div>
     </>
   )
 }
